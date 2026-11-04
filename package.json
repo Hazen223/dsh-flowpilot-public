@@ -1,0 +1,52 @@
+{
+  "name": "dsh-flowpilot",
+  "version": "1.5.1",
+  "private": true,
+  "type": "module",
+  "description": "FlowPilot —— 流程节点驱动的个人项目管理面板：业务线/项目/流程节点、双角色确认与退回、工作节奏感知、日终交接与周报、AI 建流程、GitHub/WebDAV 同步（记录级三方合并 + 写后自动同步）、版本检查与一键更新。",
+  "author": "Hazen223",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hazen223/dsh-flowpilot-public.git"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "docs",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node build-client.mjs",
+    "check": "node build-client.mjs && node --check client.js && node --check index.js",
+    "test": "node lib/selftest.mjs && node build-client.mjs && node tests/client-smoke.mjs"
+  }
+}

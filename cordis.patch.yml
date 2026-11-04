@@ -1,0 +1,8 @@
+# FlowPilot —— 流程节点驱动的个人项目管理面板（Host + Web UI 插件）
+# 宿主半：数据落在 ~/.dsh/flowpilot/data.json，注册 /flowpilot/api/* 路由与 `flowpilot` 工具。
+# 客户端半：主面板 `main`(key=flowpilot) + 侧栏入口 + 右下角快捷浮层 + 设置页。
+- insert:
+    - id: flowpilot
+      name: 'dsh-flowpilot'
+      config:
+        workspaceLabel: FlowPilot
