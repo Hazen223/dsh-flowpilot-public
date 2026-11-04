@@ -1,7 +1,7 @@
 /* ===== 归属：ai-ui · AI 建流程（PRD 解析）对话框（AI-PRD-DIALOG §5） =====
  * 三态：输入 → 解析中 → 提案；用户点「生成项目」后通过 onApplied(projectId) 交还 shell。
  * 纯客户端：不读写全局 store，只调用 /flowpilot/api/ai/{status,parse,apply}。
- * 样式只用 CSS_BASE 的 --fp-* 令牌（设计色表 + 4 栅格 + 去描边）；类名统一 fp-ai- 前缀。
+ * 样式只用 CSS_BASE 的 --fp-* 令牌（设计系统 色表 + 4 栅格 + 去描边）；类名统一 fp-ai- 前缀。
  * 被 build-client.mjs 拼进同一 factory 作用域：无 import / export / require。
  */
 

@@ -2,7 +2,8 @@
 
 > **关于本仓库**：这是 FlowPilot 的**脱敏公共版**。示例业务线/项目名（增长推广、会员中心、数据看板等）均为虚构；
 > 内部工具名已统一改为「设计稿」（代码字段 `designLink` / `kind:'design'`），内部设计系统/品牌名也已替换为通用表述。
-> 功能与私有仓库的 v1.5.1 一致。
+> 功能与公共仓库的 v1.6.0 一致。
+
 
 按 PRD《FlowPilot｜基于流程节点的个人项目管理工具》实现的 **Web 面板插件**：把「业务线 → 项目 → 流程实例 → 节点」这套推进模型放进 DeepSeek Harness 的主面板，配合今日队列、日终交接与周报自动汇总。
 
@@ -100,14 +101,15 @@ dsh-flowpilot/
 首次安装时预置了一份示例数据（3 条业务线 / 4 个项目，覆盖"设计交付进行中 / 等待产品确认 / 验收等研发 / 刚创建"四种状态）；
 在「设置」里可以一键清空或重新载入。
 
-## 从 GitHub 安装
 
-发布仓库（公共）：`https://github.com/Hazen223/dsh-flowpilot-public`（发布标签 `v1.5.1`）。
+## 从 GitHub 安装到其他电脑
+
+发布仓库（公共）：`https://github.com/Hazen223/dsh-flowpilot-public`（发布标签 `v1.6.0`）。
 
 前置条件：新电脑已安装 DSH NEXT 并完成初始化；公共仓库无需登录 GitHub。
 
 1. DSH NEXT → 设置 → **插件** → **添加插件**；
-2. 输入仓库地址 `https://github.com/Hazen223/dsh-flowpilot-public`（固定版本用 `...#v1.5.1`）；
+2. 输入仓库地址 `https://github.com/Hazen223/dsh-flowpilot-public`（固定版本用 `...#v1.6.0`）；
 3. 安装完成后按提示重启 DSH（宿主行需要重启才加载）；
 4. 验证：左侧栏出现 FlowPilot、右下角浮层、设置里的 FlowPilot 一节、agent 侧 `flowpilot` 工具。
 
@@ -122,6 +124,10 @@ dsh-flowpilot/
 
 ## 版本历史
 
+- **v1.6.0**（2026-11-04）：**节点模型 v2**（可配置完成证据 + 项目级覆盖、并行解锁、未解锁节点可跳过、归档项目只读、
+  审批日志与退回原因、等待语义细分、编号不重复、事件带操作者）；**追加节点模板**（实验推进 E01–E04 带 `plannedAt`，
+  `appendTemplate`）；**同步冲突审阅面板**（逐条/批量采用本地或云端、全部已阅）；**版本管理**（构建身份 `build-info.json`、
+  `npm run dev:link` 源码直连、CI/Release 工作流、开发版不提示更新）；自测 194/194。
 - **v1.5.1**（2026-11-04）：修复「点更新报错」——pnpm 解析 git 依赖时会另起 `git` 子进程，不继承更新检查的
   `-c credential.helper` 覆盖；macOS 上若 `gh auth setup-git` 的 `credential.https://github.com.helper`
   排在 generic `store` 之前，会拿到旧令牌 → 403 更新失败。现在通过 `GIT_CONFIG_*` 环境通道强制 pnpm 内部 git
@@ -129,7 +135,7 @@ dsh-flowpilot/
 - **v1.5.0**（2026-11-03）：同步改为**记录级三方合并**（默认 `mode:'merge'`，base 快照 `sync-base.json`，
   字段级三方 + lastTouch 决胜 + 删除/复活 + pre-merge 备份；`newest` / `three-way` 保留为显式模式）；
   新增**冲突审阅面板**（`sync-conflicts.json` 0600，逐条/批量采用本地或云端、全部已阅，三个新路由）；
-  自测 **150/150**（118 基线 + 18 条 merge 用例 + 14 条冲突审阅用例）。
+  自测 **193/193**（118 基线 + 18 merge + 14 冲突审阅 + 28 节点模型 v2 + 14 追加模板/plannedAt）。
 - **v1.4.0**（2026-11-03）：**写后自动同步**——任何客户端（界面 / agent 工具 / HTTP）写入成功后 3s 防抖触发一次同步
   （`behavior.autoPushAfterWrite` 默认开启，只读操作不触发，失败不阻断本地写）；
   顶栏响应式：宽度 <1120px 时同步/设置/节奏/汇总/时钟收进「⋯」下拉菜单，<860px 品牌只留图标；
@@ -189,13 +195,33 @@ node lib/selftest.mjs        # 领域规则自测
 
 ## 设计稿链接继承
 
-设计稿文件是项目级产物、链接通常不变，所以节点**完成**或**跳过**时，它上面的 设计稿链接会自动复制到
+设计稿 文件是项目级产物、链接通常不变，所以节点**完成**或**跳过**时，它上面的 设计稿链接会自动复制到
 **后继节点**（同流程的下一个节点 + 跨流程 handoff 目标，例如 D07 → A01）：
 
 - 复制出的链接带 `inheritedFrom`（源节点 id），节点详情的「关联链接」里会显示紫色「继承」小标，
   悬停提示「继承自 D03：…」；事件时间线也会记录「继承 设计稿链接」。
 - 目标节点已有相同 URL 时去重；已完成/已跳过节点不接收；链式继承成立（D05→D06→D07→A01）。
 - 可在设置里关闭：`updateSettings` 传 `{ patch: { inheritDesignLink: false } }`（默认开启）。
+
+## 追加节点模板（实验推进）
+
+- 流程页头卡新增 **「追加节点模板」**：往**已有流程末尾**追加一整套节点，不动已有节点、编号自动接续。
+- 内置节点包模板 **「实验推进」**：E01 预跑观测（+0 天）→ E02 5% 白名单（+7 天）→ E03 50% 灰度（+14 天）→ E04 推全（+21 天），
+  每个节点自动带 **`plannedAt`（计划时间）**，可在节点详情「计划与跟进」里单独调整。
+- 追加时的解锁规则：流程里还有进行中的节点 → 新节点全部未解锁；流程已清空 → 首个节点自动解锁（并行策略下按策略）。
+- 工具/接口：`appendTemplate({flowId, templateId:'experiment', startAt})`；节点包模板不能当流程模板用（`addFlow` 会拒绝）。
+
+## 节点模型 v2（完成证据 / 并行 / 归档保护）
+
+- **完成证据可配置**：不再写死「必须有 设计稿链接」。设置 › 完成与解锁 里可选证据类型（设计稿 / Figma / 需求文档 / 其他，不选=任意类型）
+  与最少条数（0 = 纯确认即可完成）；项目级可覆盖（`project.evidencePolicy`，工具/接口可写）。
+- **并行解锁**：`unlockPolicy: 'linear' | 'parallel'`；parallel 下完成一个节点会把同流程其余未解锁节点一起解锁，支持多稿/多渠道并行。
+- **跳过未解锁节点**：允许对未解锁节点执行跳过（范围裁剪，原因必填，编号保留），linear 模式下自动把其后的下一个节点解锁，链条不断档。
+- **归档项目只读**：所有写操作（完成/审批/加链接/备注/加节点/加流程…）在归档项目上统一返回 409，恢复归档后才能改。
+- **审批详情**：每次通过/退回都记录 `approvalLog`（角色、是否通过、操作者、时间、意见、轮次），退回额外写 `returnReason`。
+- **等待语义细分**：`waitingKind` 区分「等对方确认 / 等外部跟进」，详情里直接显示，不再是笼统的“等待”。
+- **编号不再重复**：新增自定义节点取同流程最大编号 +1（删过节点也不会撞号）；`code` 表示身份，`sortOrder` 表示顺序。
+- **事件带操作者**：事件新增 `actor`（user / ui / agent），时间线上 AI 操作会标注「AI」。
 
 ## AI 建流程（PRD → 流程节点）
 
@@ -263,7 +289,7 @@ node lib/selftest.mjs        # 领域规则自测
 - **一键更新**（仅 git 安装的机器）：用 DSH 自带 pnpm 重新安装远端最新 tag，装完点「重启 DSH」生效；
   更新只替换插件代码，不会碰 `~/.dsh/flowpilot/data.json`，不上传任何数据。
 - **开发模式（link 安装）**：只检查不自动重装，更新请在本机 `git pull` 后重启 DSH。
-- 公共仓库无需凭据即可检查更新；检查失败只在面板显示错误，不影响插件其它功能。
+- 公共仓库通过本机 git 凭据（HTTPS）访问；检查失败只在面板显示错误，不影响插件其它功能。
 
 接口形状、错误码与流程见 `docs/UPDATE.md`。
 
@@ -313,14 +339,14 @@ node lib/selftest.mjs        # 领域规则自测
 
 | 项目 | 结果 |
 |---|---|
-| 宿主自测 `node lib/selftest.mjs` | **151/151 通过**：存储原子写/revision/坏文件/导入导出、状态机（解锁·双角色门槛·退回轮次·跨流程 handoff·skip·reopen）、derived 形状、焦点静默、周报两档、HTTP 路由与错误码、apply 三种 ctx 降级路径、版本检查与更新、newest/merge、冲突审阅（conflictDetails 候选值 / resolve local·remote / 批量 / clear / 未配置 400 / HTTP 三路由） |
+| 宿主自测 `node lib/selftest.mjs` | **194/194 通过**：存储/状态机/derived/周报/HTTP 路由/同步（merge + 冲突审阅）+ 节点模型 v2 28 例 + **追加模板/plannedAt 14 例**（experiment 模板与 listTemplates、appendTemplate 追加与编号接续 E05、解锁规则 linear/parallel、4xx 校验、startAt 精确偏移、setNodeSchedule plannedAt、老数据归一、tooldef 枚举） |
 | 同步冲突审阅 | 14 例：merge 产出三方候选值（label/稳定 id/缺失标记）、dryRun 不写 `sync-conflicts.json`、真实 merge 写 0600 且与结果一致、无冲突清空旧列表、GET 只读（缺失→0 / 损坏按空）、resolve local（winner=remote 时恢复 localValue）、resolve remote（写回+revision+1+上传一次+再 merge 收敛）、批量 all、记录已删 skipped、clear 不改数据、newest/three-way/push/pull 不清空、未配置 400 |
 | 客户端离线渲染 `node tests/client-smoke.mjs` | **通过**：真实 fixture 下 loading/ready/empty 三场景渲染 79 组件 469 元素无崩溃；FlowView 状态标签命中；NodeDetail 33 个状态变体；8 个弹窗 `open` 渲染；AI 对话框 3 个状态变体；同步面板 4 个状态变体、更新面板；点击处理器实际调用无异常；未知事件 kind 容错 |
-| 构建产物 | `client.js` 633.4 KiB / 16 864 行；零 `#rrggbb`、零 `import/export`、零 Harness Client 包依赖 |
-| UI 规范审计 `node tools/audit-ui.mjs --strict` | **达标**：描边 172 → **1**（仅 spinner 环）、非 4 栅格间距 352 → **0**、调色板外 HEX 33 → **0**、`--dsw-alias-*` 颜色令牌 314 → **0** |
+| 构建产物 | `client.js` **656.2 KiB / 17 333 行**；零 `#rrggbb`、零 `import/export`、零 Harness Client 包依赖 |
+| UI 规范审计 `node tools/audit-ui.mjs --strict` | **达标**（新增：跨文件检查「用在 `<button>` 上却没清原生边框」的类名，防止原生双圈边框回归）：描边 172 → **1**（仅 spinner 环）、非 4 栅格间距 352 → **0**、调色板外 HEX 33 → **0**、`--dsw-alias-*` 颜色令牌 314 → **0** |
 | 界面几何量测（无头 Chrome 计算样式） | **顶栏宽度 1440/1280/1180/1024/900/768 六档零横向溢出**；项目行「⋯」与截止/状态零重叠；**设置弹窗 9/9**（fixed 遮罩、水平+垂直居中、≤880px、无描边、圆角 12、内容可滚动）；**流程视觉 6/6×2 主题**（进度条通栏、实线/回退虚线同轴并与圆点同心、当前节点高亮条贯穿整卡）；**井底铺满 10/10×2 主题** |
-| 客户端交互测试（迷你 React 真实事件链路） | **39/39 通过**（1440/1120/1000/980/720/560 六档宽度各自全绿）：顶栏设置 icon → 居中弹窗（含主题色预设/自定义色相/自动同步间隔）、左栏底部「AI 建流程」、顶栏同步按钮 → `POST /sync/run {mode:'newest'}`、右栏顶部收起 → rail 展开、顶栏 chip、主题色只换色相（S/L 不变、越界取模）；右键菜单 20/20 仍通过 |
-| UI 静态渲染目检 | 浅色/深色流程视图、设置弹窗、今日视图均已目检，灰阶分层/无描边/设计系统色板均符合规范 |
+| 客户端交互测试（迷你 React 真实事件链路） | **66/66 通过**（含冲突审阅面板逐条/批量/标记已阅、完成与解锁设置分组、证据计数 chip）（1440/1120/1000/980/720/560 六档宽度各自全绿）：顶栏设置 icon → 居中弹窗（含主题色预设/自定义色相/自动同步间隔）、左栏底部「AI 建流程」、顶栏同步按钮 → `POST /sync/run {mode:'newest'}`、右栏顶部收起 → rail 展开、顶栏 chip、主题色只换色相（S/L 不变、越界取模）；右键菜单 20/20 仍通过 |
+| UI 静态渲染目检 | 浅色/深色流程视图、设置弹窗、今日视图四张截图（`docs/verification/ui/`），灰阶分层/无描边/设计系统 色板均符合规范 |
 | 安装 | `plugin_manager install_bundle` → `application: restart-required`（新 bundle 行需重启加载） |
 | 删除/继承端到端 | **22/22 通过**：真实模块 + 真实 HTTP 服务，覆盖继承（含 inheritedFrom/去重/事件）、删除级联、confirm 守卫、404、备份文件、revision、derived |
 | 版本检查/更新 | **8/8 通过**：版本比较与 tag 解析、profile/link 安装识别、检查缓存与 force、git 失败错误码、apply 重装、restart、HTTP 四路由 |

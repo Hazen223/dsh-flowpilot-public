@@ -1,6 +1,6 @@
 # FlowPilot UI 设计规范（设计系统 用色 + 4 栅格间距 + 去描边）
 
-依据：《设计系统 2.0 用色规范》（业务商业化组件库色表，浅/深双模式）。
+依据：《设计系统 2.0 用色规范》（B 站商业化组件库色表，浅/深双模式）。
 本文件是 FlowPilot 面板的**视觉硬约束**。改任何 UI 样式前先读这里，改完用 `node tools/audit-ui.mjs --strict` 自检。
 
 ---
@@ -16,9 +16,9 @@
 
 ---
 
-## 2. 颜色层级（设计色表 → 令牌）
+## 2. 颜色层级（设计系统 色表 → 令牌）
 
-| 用途 | 令牌 | 浅色（默认/常规） | 深色（默认/深色） |
+| 用途 | 令牌 | 浅色（增长/常规） | 深色（增长/深色） |
 |---|---|---|---|
 | 应用底 | `--fp-base` | `#F6F7F8` (bg-primary) | `#17181A` |
 | 卡片 / 抬高面 | `--fp-surface` | `#FFFFFF` (bg-white) | `#1D1F23` |
@@ -142,7 +142,7 @@ node build-client.mjs && node --check client.js && node tests/client-smoke.mjs
 
 非 4 栅格间距基线 352 处 → 目标 **0**。
 `--dsw-alias-*` 颜色令牌 → 目标 **0**（字号/字体族等非颜色令牌允许保留，如 `--ds-font-family-code`）。
-HEX 只允许 §2 表里的 设计值（`10-util.js` 令牌块内），其它文件出现 HEX 即失败。
+HEX 只允许 §2 表里的 设计系统 值（`10-util.js` 令牌块内），其它文件出现 HEX 即失败。
 
 ---
 
@@ -180,6 +180,10 @@ HEX 只允许 §2 表里的 设计值（`10-util.js` 令牌块内），其它文
 | `--dsw-elevation-panel` / `-prominent` | `--fp-shadow-2` / `--fp-shadow-3` |
 | `--dsw-radius-sm/md/lg/xl` | `--fp-radius-sm/md/lg/xl` |
 | `--ds-font-family-code` | 保留（字体族，不属于颜色） |
+
+- **原生控件必须清零默认样式**：所有 `<button>` 都要显式 `border: 0; appearance: none;`。
+  否则浏览器会画 `2px outset` 原生边框，在深色主题下看起来像一圈怪异的「双圈高亮」
+  （`FpUpdateBadge` 踩过这个坑）。`node tools/audit-ui.mjs --strict` 会跨文件扫描「用在 button 上但没清边框」的类名并直接报错。
 
 ## 8. 禁止事项
 

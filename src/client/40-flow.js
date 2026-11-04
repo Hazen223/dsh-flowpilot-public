@@ -380,6 +380,14 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
             '跟进 ' + follow.text,
           )
         : null,
+      node.plannedAt
+        ? h(
+            'span',
+            { className: 'fp-node-meta-item fp-node-planned', title: '计划开始：' + String(node.plannedAt) },
+            h(FpIcon, { name: 'flag', size: 11 }),
+            '计划 ' + fpFmtDay(node.plannedAt, now),
+          )
+        : null,
       h(
         'span',
         { className: fpFlowClass('fp-node-meta-item', 'fp-node-links', linkCount === 0 && 'fp-is-empty'), title: '关联链接 ' + linkCount + ' 条' },
@@ -439,6 +447,122 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
 function FlowView({ state, derived, project, selection, onSelectNode, onCollapseDetail, onCreateProject, onAddFlow }) {
   const now = useNow(30000);
   const selectedNodeId = fpFlowSelectionNodeId(selection);
+  const [appendOpen, setAppendOpen] = useState(false);
+  const [appendFlowId, setAppendFlowId] = useState('');
+  const [appendTemplateId, setAppendTemplateId] = useState('experiment');
+  const [appendStart, setAppendStart] = useState('');
+  const [appendBusy, setAppendBusy] = useState(false);
+  const [appendError, setAppendError] = useState('');
+
+  const nodePackTemplates = typeof FP_NODE_PACK_TEMPLATES === 'undefined' ? [] : FP_NODE_PACK_TEMPLATES;
+
+  function openAppendTemplate() {
+    if (archived) return;
+    const first = flows.length > 0 ? flows[0] : null;
+    setAppendFlowId(first !== null && typeof first.id === 'string' ? first.id : '');
+    setAppendTemplateId(nodePackTemplates.length > 0 ? nodePackTemplates[0].id : '');
+    setAppendStart(fpDateOnly(new Date()));
+    setAppendError('');
+    setAppendOpen(true);
+  }
+
+  function submitAppendTemplate() {
+    if (appendBusy) return;
+    const template = fpNodePackTemplate(appendTemplateId);
+    if (template === null) {
+      setAppendError('请选择要追加的节点模板');
+      return;
+    }
+    if (appendFlowId === '') {
+      setAppendError('请选择要追加到的流程');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(appendStart)) {
+      setAppendError('请选择开始日期');
+      return;
+    }
+    setAppendBusy(true);
+    setAppendError('');
+    const startAt = new Date(appendStart + 'T10:00:00');
+    fpDispatch('appendTemplate', {
+      flowId: appendFlowId,
+      templateId: template.id,
+      startAt: startAt.toISOString(),
+    })
+      .then(function (result) {
+        setAppendBusy(false);
+        if (!result || result.ok !== true) {
+          setAppendError((result && result.error) || '追加模板失败');
+          return;
+        }
+        setAppendOpen(false);
+        try {
+          FpToast.push({ tone: 'success', text: '已追加「' + template.title + '」' + template.nodes.length + ' 个节点' });
+        } catch (error) {
+          /* ignore */
+        }
+      })
+      .catch(function (cause) {
+        setAppendBusy(false);
+        setAppendError(cause && cause.message ? cause.message : '追加模板失败');
+      });
+  }
+
+  function renderAppendDialog() {
+    if (!appendOpen) return null;
+    const template = fpNodePackTemplate(appendTemplateId);
+    const preview = template === null ? [] : template.nodes.map(function (item, index) {
+      const day = new Date(new Date(appendStart + 'T10:00:00').getTime() + item.offsetDays * 24 * 3600 * 1000);
+      const iso = Number.isNaN(day.getTime()) ? null : day.toISOString();
+      return h(
+        'div',
+        { key: 'p-' + index, className: 'fp-append-row' },
+        h('span', { className: 'fp-append-code' }, 'E' + String(index + 1).padStart(2, '0')),
+        h('span', { className: 'fp-append-title' }, item.title),
+        h('span', { className: 'fp-append-meta' }, item.assigneeRole || ''),
+        h('span', { className: 'fp-append-day' }, iso !== null ? fpFmtDay(iso, new Date()) : '—'),
+      );
+    });
+    return h(
+      FpDialog,
+      {
+        open: true,
+        title: '追加节点模板',
+        description: '把一套节点追加到已有流程末尾（不改动已有节点，编号自动接续）',
+        onClose: function () { setAppendOpen(false); },
+        actions: [
+          h(FpButton, { key: 'cancel', variant: 'ghost', disabled: appendBusy, onClick: function () { setAppendOpen(false); } }, '取消'),
+          h(FpButton, { key: 'submit', variant: 'primary', icon: 'plus', disabled: appendBusy, onClick: submitAppendTemplate },
+            appendBusy ? '追加中…' : '追加'),
+        ],
+      },
+      h('div', { className: 'fp-append-form' },
+        fpFlowField('追加到流程', h(FpSelect, {
+          value: appendFlowId,
+          options: flows.map(function (flow) {
+            const meta = FP_TEMPLATE_META[flow.templateId] || {};
+            return { value: flow.id, label: flow.name || meta.title || '流程' };
+          }),
+          width: '100%',
+          onChange: function (value) { setAppendFlowId(value); },
+        })),
+        fpFlowField('节点模板', h(FpSelect, {
+          value: appendTemplateId,
+          options: nodePackTemplates.map(function (item) { return { value: item.id, label: item.title }; }),
+          width: '100%',
+          onChange: function (value) { setAppendTemplateId(value); },
+        }), template !== null ? template.hint : null),
+        fpFlowField('开始日期', h('input', {
+          type: 'date',
+          className: 'fp-dt-input',
+          value: appendStart,
+          onChange: function (event) { setAppendStart(event.target.value); },
+        }), '各阶段计划时间 = 开始日期 + 偏移天数（可在节点详情里单独调整）'),
+        h('div', { className: 'fp-append-preview' }, preview),
+        appendError !== '' ? h('p', { className: 'fp-append-error', role: 'alert' }, appendError) : null,
+      ),
+    );
+  }
 
   if (!state) {
     return h('div', { className: 'fp-flow fp-flow--empty' }, h(FpSpinner, { label: '正在载入流程…' }));
@@ -692,6 +816,20 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
                   size: 'sm',
                   variant: 'default',
                   icon: 'plus',
+                  disabled: flows.length === 0,
+                  title: flows.length === 0 ? '先创建一个流程，再追加节点模板' : '把一套节点模板追加到已有流程（如「实验推进」）',
+                  onClick: openAppendTemplate,
+                },
+                '追加节点模板',
+              )
+            : null,
+          !archived
+            ? h(
+                FpButton,
+                {
+                  size: 'sm',
+                  variant: 'default',
+                  icon: 'plus',
                   disabled: hasAcceptance,
                   title: hasAcceptance ? '项目已包含验收流程' : '为项目添加验收流程（A 系列节点）',
                   onClick: requestAddFlow,
@@ -723,6 +861,7 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
         : null,
     ),
     h('div', { className: 'fp-flow-canvas' }, h('div', { className: 'fp-flow-inner' }, ...blocks)),
+    renderAppendDialog(),
   );
 }
 
@@ -740,6 +879,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
   const [waitAt, setWaitAt] = useState('');
   const [scheduleEditing, setScheduleEditing] = useState(false);
   const [dueDraft, setDueDraft] = useState('');
+  const [plannedDraft, setPlannedDraft] = useState('');
   const [followDraft, setFollowDraft] = useState('');
   const [linkForm, setLinkForm] = useState(false);
   const [linkTitle, setLinkTitle] = useState('');
@@ -787,7 +927,9 @@ function NodeDetail({ state, derived, project, node, onClose }) {
   const links = fpNodeLinks(safeState, node.id);
   const approvalNode = fpIsApprovalNode(node);
   const approvals = node.approvals || {};
-  const gate = fpCanComplete(node, links, approvals);
+  const settingsOfState = safeState && safeState.settings ? safeState.settings : {};
+  const evidencePolicy = fpEvidencePolicy(node, project, settingsOfState);
+  const gate = fpCanComplete(node, links, approvals, evidencePolicy);
   const archived = !!(project && project.status === 'archived');
   const finished = status === 'completed' || status === 'skipped';
   const locked = status === 'locked';
@@ -897,13 +1039,19 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     setError(null);
     setDueDraft(fpFlowToLocalInput(node.dueAt));
     setFollowDraft(fpFlowToLocalInput(node.followUpAt));
+    setPlannedDraft(fpFlowToLocalInput(node.plannedAt));
     setScheduleEditing(true);
   }
 
   function saveSchedule() {
     perform(
       'setNodeSchedule',
-      { nodeId: node.id, dueAt: fpFlowFromLocalInput(dueDraft), followUpAt: fpFlowFromLocalInput(followDraft) },
+      {
+        nodeId: node.id,
+        dueAt: fpFlowFromLocalInput(dueDraft),
+        followUpAt: fpFlowFromLocalInput(followDraft),
+        plannedAt: fpFlowFromLocalInput(plannedDraft),
+      },
       '计划时间已更新',
     ).then((ok) => {
       if (ok) setScheduleEditing(false);
@@ -970,17 +1118,66 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     saveNotes();
   }
 
+  function renderApprovalLog() {
+    const log = fpArray(node.approvalLog);
+    const reason = node.returnReason !== null && typeof node.returnReason === 'object' ? node.returnReason : null;
+    if (log.length === 0 && reason === null) return null;
+    const items = [];
+    if (reason !== null) {
+      items.push(
+        h(
+          'div',
+          { key: 'return', className: 'fp-detail-log-row fp-detail-log-row--warn' },
+          h('span', { className: 'fp-detail-log-role' }, '退回'),
+          h('span', { className: 'fp-detail-log-text' }, String(reason.comment || '')),
+          h(
+            'span',
+            { className: 'fp-detail-log-meta' },
+            String(reason.fromRole === 'product' ? '产品' : reason.fromRole === 'design' ? '设计' : reason.by || '') +
+              (typeof reason.round === 'number' ? ' · 第 ' + reason.round + ' 轮' : ''),
+          ),
+        ),
+      );
+    }
+    for (const entry of log.slice(-6)) {
+      items.push(
+        h(
+          'div',
+          { key: 'log-' + items.length, className: 'fp-detail-log-row' },
+          h('span', { className: 'fp-detail-log-role' }, String(entry.role === 'product' ? '产品' : '设计')),
+          h('span', { className: 'fp-detail-log-text' }, entry.passed === true ? '通过' : '未通过'),
+          h(
+            'span',
+            { className: 'fp-detail-log-meta' },
+            (entry.comment ? String(entry.comment) + ' · ' : '') +
+              (entry.by && entry.by !== 'user' ? String(entry.by) + ' · ' : '') +
+              (entry.at ? fpFmtDateTime(entry.at, new Date()) : ''),
+          ),
+        ),
+      );
+    }
+    return h('div', { className: 'fp-detail-log' }, items);
+  }
+
   function renderApprovalSection() {
     const gateTone = gate.ok ? 'fp-is-ok' : 'fp-is-warn';
     return fpFlowSection(
       '双角色确认',
-      { hint: '双方通过 + 设计稿链接', className: 'fp-detail-sec--approval' },
+      { hint: '双方通过 + ' + fpEvidenceText(evidencePolicy), className: 'fp-detail-sec--approval' },
       h(
         'div',
         { className: 'fp-detail-gate ' + gateTone },
         h(FpIcon, { name: gate.ok ? 'check' : 'alert', size: 12 }),
-        h('span', {}, gate.ok ? '完成门槛已满足，可以完成节点' : '完成门槛：设计、产品均确认通过，且至少 1 条 设计稿链接'),
+        h(
+          'span',
+          {},
+          gate.ok
+            ? '完成门槛已满足，可以完成节点'
+            : '完成门槛：设计、产品均确认通过，且' + fpEvidenceText(evidencePolicy) +
+              '（当前已有 ' + fpEvidenceCount(links, evidencePolicy) + ' 条）',
+        ),
       ),
+      renderApprovalLog(),
       h(
         'div',
         { className: 'fp-detail-approval-list' },
@@ -1195,7 +1392,9 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             size: 'sm',
             variant: 'ghost',
             icon: 'skip',
-            disabled: !canAct,
+            // 未解锁节点也允许跳过（范围裁剪）：只有归档/已完成/忙碌时禁用
+            disabled: archived || finished || !!busy,
+            title: locked ? '跳过未解锁节点 = 本轮范围裁剪（编号保留）' : '跳过节点（不计入完成）',
             onClick: () => {
               setActionMode('skip');
               setReason('');
@@ -1321,6 +1520,15 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             }),
           ),
           fpFlowField(
+            '计划开始时间',
+            h('input', {
+              type: 'datetime-local',
+              className: 'fp-dt-input',
+              value: plannedDraft,
+              onChange: (event) => setPlannedDraft(event.target.value),
+            }),
+          ),
+          fpFlowField(
             '下次跟进时间',
             h('input', {
               type: 'datetime-local',
@@ -1351,6 +1559,9 @@ function NodeDetail({ state, derived, project, node, onClose }) {
         h(
           'div',
           { className: 'fp-detail-kv-list' },
+          fpFlowKv('计划开始', node.plannedAt ? fpFmtDay(node.plannedAt, now) : '未设置', {
+            title: node.plannedAt ? String(node.plannedAt) : undefined,
+          }),
           fpFlowKv('计划完成', dueInfo ? dueInfo.text : '未设置', {
             tone: dueInfo && dueInfo.overdue ? 'fp-is-overdue' : dueInfo && dueInfo.soon ? 'fp-is-soon' : null,
             title: dueInfo ? dueInfo.full : undefined,
@@ -1526,6 +1737,9 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             'div',
             { className: 'fp-detail-event-top' },
             h('span', { className: 'fp-detail-event-kind' }, fpFlowEventLabel(event.kind)),
+            event.actor && event.actor !== 'user'
+              ? h('span', { className: 'fp-detail-event-actor', title: '操作者' }, event.actor === 'agent' ? 'AI' : String(event.actor))
+              : null,
             typeof event.round === 'number' ? h('span', { className: 'fp-detail-event-round' }, '第 ' + event.round + ' 轮') : null,
             h(
               'time',
@@ -1574,6 +1788,20 @@ function NodeDetail({ state, derived, project, node, onClose }) {
         h('span', { className: 'fp-detail-sub-item' }, h(FpIcon, { name: 'dot', size: 8 }), node.assigneeRole || '未指派'),
         node.round > 1 ? h(FpChip, { tone: 'amber' }, '第 ' + node.round + ' 轮') : null,
         archived ? h(FpChip, { tone: 'warn', dot: true }, '已归档') : null,
+        status === 'waiting'
+          ? h(
+              FpChip,
+              { tone: 'warn', dot: true, title: '等待谁/等什么' },
+              node.waitingKind === 'approval' ? '等对方确认' : node.waitingKind === 'external' ? '等外部跟进' : '等待中',
+            )
+          : null,
+        fpIsApprovalNode(node)
+          ? h(
+              FpChip,
+              { tone: gate.ok ? 'muted' : 'warn', title: '完成证据条件：' + fpEvidenceText(evidencePolicy) },
+              '证据 ' + fpEvidenceCount(links, evidencePolicy) + '/' + Math.max(0, Number(evidencePolicy.minLinks) || 0),
+            )
+          : null,
       ),
       meta.hint ? h('p', { className: 'fp-detail-hint' }, meta.hint) : null,
       node.detail ? h('p', { className: 'fp-detail-desc' }, node.detail) : null,
@@ -1614,7 +1842,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
 }
 
 /* ------------------------------------------------------------------ *
- * 样式：只在 fp- 命名空间内；颜色一律取自 CSS_BASE 的 --fp-* 令牌（设计色表 + 4 栅格）
+ * 样式：只在 fp- 命名空间内；颜色一律取自 CSS_BASE 的 --fp-* 令牌（设计系统 色表 + 4 栅格）
  * ------------------------------------------------------------------ */
 
 const CSS_FLOW = String.raw`
@@ -2628,4 +2856,43 @@ const CSS_FLOW = String.raw`
   .fp-detail-head { padding: var(--fp-sp-3) var(--fp-sp-3) var(--fp-sp-2); }
   .fp-detail-scroll { padding: var(--fp-sp-2) var(--fp-sp-2) var(--fp-sp-6); }
 }
+
+/* ---- 审批日志 / 退回原因 / 事件操作者 ---- */
+.fp-detail-log{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.fp-detail-log-row{
+  display:flex;align-items:center;gap:8px;min-width:0;
+  padding:var(--fp-sp-1) var(--fp-sp-2);border-radius:var(--fp-radius-sm);
+  background:var(--fp-surface-2);font-size:var(--fp-font-xs);
+}
+.fp-detail-log-row--warn{
+  background:color-mix(in srgb,var(--fp-bad) 10%,transparent);
+}
+.fp-detail-log-role{flex:none;font-weight:600;color:var(--fp-text-dim);}
+.fp-detail-log-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fp-text);}
+.fp-detail-log-meta{margin-left:auto;flex:none;font-size:10px;color:var(--fp-text-tertiary);}
+.fp-detail-event-actor{
+  padding:0 4px;height:16px;display:inline-flex;align-items:center;
+  border-radius:var(--fp-radius-sm);
+  background:color-mix(in srgb,var(--fp-accent) 12%,transparent);
+  color:var(--fp-accent-strong);font-size:10px;font-weight:600;
+}
+
+/* ---- 追加节点模板弹窗 ---- */
+.fp-append-form{display:flex;flex-direction:column;gap:12px;}
+.fp-append-preview{
+  display:flex;flex-direction:column;gap:4px;
+  padding:8px;border-radius:var(--fp-radius-md);
+  background:var(--fp-surface-2);
+}
+.fp-append-row{display:flex;align-items:center;gap:8px;min-width:0;font-size:var(--fp-font-xs);}
+.fp-append-code{
+  flex:none;min-width:28px;padding:0 4px;border-radius:var(--fp-radius-sm);
+  background:var(--fp-surface);color:var(--fp-text-tertiary);
+  font-family:var(--fp-mono);font-size:10px;text-align:center;
+}
+.fp-append-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fp-text);}
+.fp-append-meta{flex:none;font-size:10px;color:var(--fp-text-tertiary);}
+.fp-append-day{margin-left:auto;flex:none;font-size:10px;color:var(--fp-text-dim);font-variant-numeric:tabular-nums;}
+.fp-append-error{margin:0;font-size:var(--fp-font-xs);color:var(--fp-bad);}
+.fp-node-planned{color:var(--fp-text-dim);}
 `;

@@ -1,3 +1,13 @@
+## 本地开发版（beta）：不检查更新
+
+安装形态为 **本地源码直连**（`~/.dsh/profiles/<profile>/node_modules/dsh-flowpilot` 是指向仓库工作树的软链，
+或插件目录里带 `.git`，或设置 `FLOWPILOT_CHANNEL=dev`）时，更新服务会把它识别为**本地开发版**：
+
+- `/update/status` 返回 `devBuild: true`、`channel: "dev"`、`updateAvailable: false`、`updateSuppressed: true`；
+- `/update/check` **不联网**（不调 git、不读远端 tag），直接返回状态；
+- 顶栏**不显示**「可更新」徽标；设置 › 版本与更新 里显示「本地开发版」并隐藏「检查更新 / 更新」按钮；
+- 更新方式：改动代码后**重启 DSH** 即生效（或 `git pull` 后重启）；`apply` 仍会返回 `UPDATE_DEV_MODE`。
+
 # FlowPilot · 版本检查与一键更新契约
 
 给 FlowPilot 插件加「发现新版本 → 提醒 → 一键更新 → 重启生效」的闭环。
@@ -40,10 +50,20 @@
   "ok": true,
   "status": {
     "currentVersion": "1.1.0",       // 当前已加载插件版本（package.json）
+    "buildLabel": "1.1.0-dev+abc1234.dirty", // 构建身份：版本±通道+提交号[.dirty]（缺 build-info.json 时回退版本号）
+    "build": {                       // 构建元数据（build-client.mjs 生成 build-info.json）
+      "version": "1.1.0", "label": "1.1.0-dev+abc1234.dirty",
+      "channel": "dev",              // dev | beta | release（FLOWPILOT_CHANNEL 可覆盖）
+      "sha": "abc1234", "dirty": true, "builtAt": "ISO"
+    },
+    "devBuild": true,                // link 安装 / 带 .git / build.dirty=true / channel=dev
+    "channel": "dev",                // 运行通道：dev | release
+    "updateSuppressed": true,        // 开发版抑制更新提示
+    "updateSuppressedReason": "dev-build",
     "latestVersion": "1.2.0",        // 最近一次检查到的最新 tag（未检查为 null）
     "updateAvailable": true,         // latest > current 且尚未安装
     "checkedAt": "ISO",              // 最近检查时间
-    "repo": "https://github.com/example/dsh-flowpilot",
+    "repo": "https://github.com/Hazen223/dsh-flowpilot-public",
     "mode": "profile",               // profile | link
     "profileDir": "~/.dsh/profiles/desktop",  // link 时为 null
     "canApply": true,                // mode=profile 且找到 DSH 自带 pnpm
@@ -71,6 +91,18 @@
 | `UPDATE_APPLY_FAILED` | 500 | pnpm 安装失败（透出 stdout 尾部） |
 | `UPDATE_UNSUPPORTED` | 500 | 非 macOS 桌面端请求重启 |
 
+## 2.5 发布与通道（release 产物）
+
+```bash
+npm run release:check      # 本地门禁：build + selftest + smoke + UI audit
+git tag v1.6.0 && git push origin v1.6.0   # CI：.github/workflows/release.yml → GitHub Release + changelog
+```
+
+- CI（`.github/workflows/ci.yml`）：push/PR 跑 build、语法检查、selftest、client smoke、UI 审计，并校验**提交进仓库的 `client.js` 与源码一致**；
+- Release（`.github/workflows/release.yml`）：打 `v*` tag 触发，跑同一套门禁后创建 Release，附 `client.js` 与 `build-info.json`（安装来源仍是 git tag）；
+- 通道：`FLOWPILOT_CHANNEL=release|beta|dev` 可强制构建通道；本地有未提交改动默认 `dev`（`label` 带 `.dirty`）；
+- 开发机：`npm run dev:link` 把 profile 指向本仓库源码；`npm run dev:check` 检查是否仍直连（被 `pnpm install` 冲掉时退出码 1）。
+
 ## 3. 更新流程
 
 ```
@@ -84,7 +116,7 @@
 ```
 
 更新走本机 git 凭据（HTTPS）：机器上需要已配置 `~/.git-credentials` 或 `gh auth setup-git`；
-公共仓库无需凭据即可检查；若把仓库改为私有，需先配置本机 git 凭据，否则检查会报 `UPDATE_CHECK_FAILED`（不影响插件其它功能）。
+公共仓库不配置凭据时检查会报 `UPDATE_CHECK_FAILED`，不影响插件其它功能。
 
 **凭据健壮性**：macOS 上 Xcode 的 system gitconfig 会注册 `credential.helper=osxkeychain`，
 无 GUI 会话时会卡住等待钥匙串弹窗（iMac 实测）。因此更新器在检测到 `~/.git-credentials` 时，

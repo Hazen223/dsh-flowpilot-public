@@ -20,13 +20,23 @@ function fpUpdateStr(value, fallback) {
 function fpUpdateNormalizeStatus(raw) {
   if (!fpUpdateIsObj(raw)) return null;
   const errorSrc = fpUpdateIsObj(raw.error) ? raw.error : null;
+  const buildSrc = fpUpdateIsObj(raw.build) ? raw.build : null;
   return {
     currentVersion: fpUpdateStr(raw.currentVersion),
+    buildLabel: fpUpdateStr(raw.buildLabel) || fpUpdateStr(raw.currentVersion),
+    build: buildSrc === null ? null : {
+      sha: fpUpdateStr(buildSrc.sha),
+      dirty: buildSrc.dirty === true,
+      channel: fpUpdateStr(buildSrc.channel),
+      builtAt: fpUpdateStr(buildSrc.builtAt),
+    },
     latestVersion: fpUpdateStr(raw.latestVersion),
     updateAvailable: raw.updateAvailable === true,
     checkedAt: fpUpdateStr(raw.checkedAt),
     repo: fpUpdateStr(raw.repo),
     mode: raw.mode === 'profile' ? 'profile' : 'link',
+    devBuild: raw.devBuild === true || raw.channel === 'dev',
+    updateSuppressed: raw.updateSuppressed === true,
     canApply: raw.canApply === true,
     busy: fpUpdateStr(raw.busy),
     appliedVersion: fpUpdateStr(raw.appliedVersion),
@@ -57,6 +67,15 @@ function fpUpdateStateView(status, loading) {
     return loading
       ? { tone: 'muted', label: '读取中…', hint: '' }
       : { tone: 'muted', label: '状态未知', hint: '点击「检查更新」读取远端版本。' };
+  }
+  if (status.devBuild) {
+    return {
+      tone: 'idle',
+      label: '本地开发版',
+      hint:
+        '本地开发版 ' + (status.buildLabel || status.currentVersion) +
+        '：不检查更新，改完代码 / git pull 后重启 DSH 即可生效。',
+    };
   }
   if (status.restartRequired) {
     return {
@@ -164,6 +183,8 @@ function FpUpdateBadge(props) {
   }, []);
 
   if (status === null) return null;
+  // 本地开发版不显示任何更新提示（改代码重启即生效，避免被"可更新"打扰）
+  if (status.devBuild === true) return null;
   const restart = status.restartRequired === true;
   const available = status.updateAvailable === true;
   if (!restart && !available) return null;
@@ -311,10 +332,14 @@ function FpUpdatePanel(props) {
 
   const view = fpUpdateStateView(status, loading);
   const chips = [];
+  const devBuild = status !== null && status.devBuild === true;
   if (status !== null) {
-    chips.push(h(FpChip, { key: 'mode', tone: status.mode === 'profile' ? 'brand' : 'idle' }, status.mode === 'profile' ? 'git 安装' : '开发模式 link'));
-    chips.push(h(FpChip, { key: 'current', tone: 'muted' }, '当前 ' + fpUpdateVersion(status.currentVersion)));
-    if (status.latestVersion !== '' && status.latestVersion !== status.currentVersion) {
+    chips.push(
+      h(FpChip, { key: 'mode', tone: devBuild ? 'idle' : status.mode === 'profile' ? 'brand' : 'idle' },
+        devBuild ? '本地开发版' : status.mode === 'profile' ? 'git 安装' : '开发模式 link'),
+    );
+    chips.push(h(FpChip, { key: 'current', tone: 'muted', title: status.build && status.build.sha ? '构建提交 ' + status.build.sha : undefined }, '当前 ' + (status.buildLabel || fpUpdateVersion(status.currentVersion))));
+    if (!devBuild && status.latestVersion !== '' && status.latestVersion !== status.currentVersion) {
       chips.push(h(FpChip, { key: 'latest', tone: status.updateAvailable ? 'warn' : 'success' }, '最新 ' + fpUpdateVersion(status.latestVersion)));
     }
     if (status.restartRequired) chips.push(h(FpChip, { key: 'restart', tone: 'amber' }, '待重启生效'));
@@ -343,9 +368,11 @@ function FpUpdatePanel(props) {
   const canApply = status !== null && status.canApply === true;
   const hasUpdate = status !== null && status.updateAvailable === true;
   const needsRestart = status !== null && status.restartRequired === true;
-  const applyHint = canApply
-    ? '点击「更新」会用 DSH 自带的 pnpm 重新安装远端最新 tag（等价插件页「移除 + 重装」），装完点「重启 DSH」生效；不会改动项目数据。'
-    : '当前是开发模式（link 安装）：只检查远端版本，不会自动重装。更新请在本机 git pull 后重启 DSH；git 安装的机器可直接用「更新」。';
+  const applyHint = devBuild
+    ? '当前是本地开发版（源码直连）：不检查、不提示更新；改完代码后重启 DSH 即生效。'
+    : canApply
+      ? '点击「更新」会用 DSH 自带的 pnpm 重新安装远端最新 tag（等价插件页「移除 + 重装」），装完点「重启 DSH」生效；不会改动项目数据。'
+      : '当前是开发模式（link 安装）：只检查远端版本，不会自动重装。更新请在本机 git pull 后重启 DSH；git 安装的机器可直接用「更新」。';
 
   const children = [
     h('div', { key: 'status', className: 'fp-update-status' }, statusChildren),
@@ -363,15 +390,19 @@ function FpUpdatePanel(props) {
   );
   children.push(
     h('div', { key: 'actions', className: 'fp-update-actions' },
-      fpvBtn('check', busy === 'check' ? '检查中…' : '检查更新', handleCheck, {
-        disabled: !!busy,
-        title: '读取远端 tag（走本机 git 凭据）',
-      }),
-      fpvBtn('apply', busy === 'apply' ? '更新中…' : (hasUpdate ? '更新到 ' + fpUpdateVersion(status.latestVersion) : '更新'), handleApply, {
-        variant: 'primary',
-        disabled: !!busy || !canApply || !hasUpdate,
-        title: canApply ? '重新安装远端最新版本' : '开发模式安装，不能自动更新',
-      }),
+      devBuild
+        ? null
+        : fpvBtn('check', busy === 'check' ? '检查中…' : '检查更新', handleCheck, {
+            disabled: !!busy,
+            title: '读取远端 tag（走本机 git 凭据）',
+          }),
+      devBuild
+        ? null
+        : fpvBtn('apply', busy === 'apply' ? '更新中…' : (hasUpdate ? '更新到 ' + fpUpdateVersion(status.latestVersion) : '更新'), handleApply, {
+            variant: 'primary',
+            disabled: !!busy || !canApply || !hasUpdate,
+            title: canApply ? '重新安装远端最新版本' : '开发模式安装，不能自动更新',
+          }),
       needsRestart
         ? fpvBtn('restart', restarting ? '重启中…' : '重启 DSH', handleRestart, {
             variant: 'primary',
@@ -389,7 +420,7 @@ function FpUpdatePanel(props) {
   children.push(
     h('p', { key: 'note', className: 'fp-update-note' },
       h(FpIcon, { name: 'flag', size: 12 }),
-      h('span', null, '公共仓库无需登录即可检查更新；更新只重装插件代码，不触碰 ~/.dsh/flowpilot/data.json，也不会上传任何数据。'),
+      h('span', null, '公共仓库通过本机 git 凭据（HTTPS）访问；更新只重装插件代码，不触碰 ~/.dsh/flowpilot/data.json，也不会上传任何数据。'),
     ),
   );
 
@@ -451,25 +482,40 @@ const CSS_UPDATE = String.raw`
   overflow-wrap:anywhere;
 }
 .fp-update-note svg{flex:0 0 auto;margin-top:4px;}
+/* 顶栏更新提示：与同步/设置 icon 按钮同为 28px 药丸面，无描边（原生按钮边框会显示成"双圈"，必须清掉） */
 .fp-update-badge{
   display:inline-flex;
   align-items:center;
-  gap:4px;
-  padding:4px 8px;
+  gap:var(--fp-sp-1);
+  height:28px;
+  padding:0 var(--fp-sp-2);
+  border:0;
   border-radius:var(--fp-radius-pill);
-  background:color-mix(in srgb, var(--fp-brand) 12%, transparent);
-  color:var(--fp-text);
+  background:var(--fp-surface-2);
+  color:var(--fp-text-dim);
   font:inherit;
   font-size:var(--fp-font-xs);
-  line-height:1.4;
+  line-height:1;
   white-space:nowrap;
   cursor:pointer;
-  transition:background-color 140ms ease;
+  appearance:none;
+  -webkit-appearance:none;
+  transition:background-color 140ms ease, color 140ms ease;
 }
-.fp-update-badge:hover{background:color-mix(in srgb, var(--fp-brand) 20%, transparent);}
+.fp-update-badge svg{flex:0 0 auto;}
+.fp-update-badge[data-tone="brand"]{
+  background:color-mix(in srgb, var(--fp-accent) 14%, transparent);
+  color:var(--fp-accent-strong);
+}
+.fp-update-badge:hover{background:var(--fp-pressed);color:var(--fp-text);}
+.fp-update-badge[data-tone="brand"]:hover{background:color-mix(in srgb, var(--fp-accent) 22%, transparent);}
 .fp-update-badge[data-tone="warn"]{
   background:color-mix(in srgb, var(--fp-warn) 16%, transparent);
   color:var(--fp-warn-strong);
 }
 .fp-update-badge[data-tone="warn"]:hover{background:color-mix(in srgb, var(--fp-warn) 24%, transparent);}
+.fp-update-badge:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--fp-accent) 45%, transparent);
+}
 `;

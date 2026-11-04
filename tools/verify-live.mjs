@@ -107,11 +107,57 @@ try {
 }
 
 record(
+  '新宿主：节点模型 v2 已就绪（settings.evidencePolicy + unlockPolicy）',
+  state !== null && state.settings
+    && state.settings.evidencePolicy !== null && typeof state.settings.evidencePolicy === 'object'
+    && Array.isArray(state.settings.evidencePolicy.kinds)
+    && (state.settings.unlockPolicy === 'linear' || state.settings.unlockPolicy === 'parallel'),
+  state === null ? '无数据' : 'evidencePolicy=' + JSON.stringify(state.settings?.evidencePolicy) + ' unlockPolicy=' + String(state.settings?.unlockPolicy),
+)
+
+record(
   '新宿主：settings.syncIntervalMinutes 已存在（1~60，默认 5）',
   state !== null && state.settings && Number.isInteger(state.settings.syncIntervalMinutes)
     && state.settings.syncIntervalMinutes >= 1 && state.settings.syncIntervalMinutes <= 60,
   state === null ? '无数据' : 'syncIntervalMinutes=' + String(state.settings?.syncIntervalMinutes),
 )
+
+/* 本地开发版：本地源码直连安装应被识别为 dev 并抑制更新提示 */
+try {
+  const out = await getJson('/flowpilot/api/update/status')
+  const st = out.json && out.json.status ? out.json.status : (out.json || {})
+  const dev = st.devBuild === true && st.channel === 'dev' && st.updateAvailable === false && st.updateSuppressed === true
+  record('本地开发版：更新提示已抑制（devBuild=true / updateAvailable=false）', out.status === 200 && dev,
+    'HTTP ' + out.status + ' devBuild=' + String(st.devBuild) + ' channel=' + String(st.channel) + ' updateAvailable=' + String(st.updateAvailable))
+} catch (error) {
+  record('本地开发版：更新提示已抑制', false, error.message)
+}
+
+/* 构建身份：/update/status 应暴露 buildLabel（版本+sha+dirty），用于排障时确认跑的是哪一版 */
+try {
+  const out = await getJson('/flowpilot/api/update/status')
+  const st = out.json && out.json.status ? out.json.status : (out.json || {})
+  const ok = typeof st.buildLabel === 'string' && st.buildLabel !== '' && st.build !== null && typeof st.build === 'object'
+  record('构建身份可见（buildLabel / build.sha，区分本地改动）', out.status === 200 && ok,
+    'buildLabel=' + String(st.buildLabel) + ' sha=' + String(st.build && st.build.sha) + ' dirty=' + String(st.build && st.build.dirty))
+} catch (error) {
+  record('构建身份可见（buildLabel / build.sha）', false, error.message)
+}
+
+/* appendTemplate：用空 payload 探测动作是否注册（新宿主返回 INVALID_INPUT，旧宿主返回「未知动作」） */
+try {
+  const out = await postJson('/flowpilot/api/action', { action: 'appendTemplate', payload: {} })
+  const json = out.json || {}
+  const unknown = typeof json.error === 'string' && json.error.indexOf('未知动作') !== -1
+  const plannedAtReady = state !== null && Array.isArray(state.nodes)
+    ? state.nodes.every((node) => Object.prototype.hasOwnProperty.call(node || {}, 'plannedAt'))
+    : false
+  record('新宿主：appendTemplate（追加节点模板）已注册且节点带 plannedAt',
+    !unknown && out.status === 400 && json.code === 'INVALID_INPUT' && plannedAtReady,
+    'HTTP ' + out.status + ' code=' + String(json.code) + ' plannedAtReady=' + String(plannedAtReady))
+} catch (error) {
+  record('新宿主：appendTemplate（追加节点模板）已注册且节点带 plannedAt', false, error.message)
+}
 
 /* dryRun：完整算一遍合并但不写本地/远端/备份，可安全地验证三方合并是否已上线 */
 try {

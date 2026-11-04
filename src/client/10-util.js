@@ -110,6 +110,28 @@ function fpApplyAccentHue(hue, persist) {
   return h;
 }
 
+/* 节点包模板（只能「追加」进已有流程，不能当流程模板用）：与宿主 appendTemplate 的模板表一一对应。 */
+const FP_NODE_PACK_TEMPLATES = [
+  {
+    id: 'experiment',
+    title: '实验推进',
+    short: '实验',
+    prefix: 'E',
+    hint: '预跑 → 5% 白名单 → 50% 灰度 → 推全，每阶段一个节点，自动带 plannedAt（按开始时间 + 天数偏移）',
+    nodes: [
+      { title: '预跑观测', offsetDays: 0, assigneeRole: '研发', detail: '小流量预跑，观察 7 天核心指标与异常' },
+      { title: '5% 白名单', offsetDays: 7, assigneeRole: '研发', detail: '5% 白名单放量，核对实验组/对照组指标' },
+      { title: '50% 灰度', offsetDays: 14, assigneeRole: '研发', detail: '50% 灰度放量，观察稳定性与收益' },
+      { title: '推全', offsetDays: 21, assigneeRole: '研发', detail: '全量推送，回收实验结论' },
+    ],
+  },
+];
+
+function fpNodePackTemplate(id) {
+  const key = typeof id === 'string' ? id : '';
+  return FP_NODE_PACK_TEMPLATES.filter(function (item) { return item.id === key; })[0] || null;
+}
+
 /* 事件类型 → 中文标签（时间线、周报辅助都用它） */
 const FP_EVENT_LABELS = {
   projectCreated: '创建项目',
@@ -473,7 +495,50 @@ function fpHasDesignLink(links) {
 /**
  * 本地预检（展示用；最终判定在宿主）。返回 {ok, code, error}。
  */
-function fpCanComplete(node, links, approvals) {
+/** 证据策略默认值（与宿主一致）：至少 1 条任意类型链接。 */
+const FP_EVIDENCE_DEFAULT = { kinds: [], minLinks: 1 };
+const FP_EVIDENCE_KIND_LABELS = { design: '设计稿', figma: 'Figma', doc: '需求文档', other: '其他' };
+
+/** 解析节点实际生效的证据策略：node → project → settings → 默认。 */
+function fpEvidencePolicy(node, project, settings) {
+  const candidates = [
+    node !== null && node !== undefined ? node.evidencePolicy : null,
+    project !== null && project !== undefined ? project.evidencePolicy : null,
+    settings !== null && settings !== undefined ? settings.evidencePolicy : null,
+  ];
+  for (const candidate of candidates) {
+    if (candidate !== null && candidate !== undefined && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      const kinds = fpArray(candidate.kinds).filter(function (kind) { return typeof kind === 'string' && kind !== ''; });
+      const rawMin = Number(candidate.minLinks);
+      const minLinks = Number.isFinite(rawMin) ? Math.max(0, Math.round(rawMin)) : 1;
+      return { kinds: kinds, minLinks: minLinks };
+    }
+  }
+  return { kinds: FP_EVIDENCE_DEFAULT.kinds.slice(), minLinks: FP_EVIDENCE_DEFAULT.minLinks };
+}
+
+/** 证据策略的人读文案（"需要至少 1 条 设计稿链接" / "至少 1 条任意类型链接"）。 */
+function fpEvidenceText(policy) {
+  const p = policy !== null && typeof policy === 'object' ? policy : FP_EVIDENCE_DEFAULT;
+  const minLinks = Number.isFinite(Number(p.minLinks)) ? Math.max(0, Math.round(Number(p.minLinks))) : 1;
+  if (minLinks === 0) return '不需要证据链接';
+  const kinds = fpArray(p.kinds).map(function (kind) { return FP_EVIDENCE_KIND_LABELS[kind] || kind; });
+  const kindText = kinds.length === 0 ? '任意类型' : kinds.join(' / ');
+  return '至少 ' + minLinks + ' 条 ' + kindText + ' 链接';
+}
+
+/** 按策略统计可作为证据的链接数。 */
+function fpEvidenceCount(links, policy) {
+  const p = policy !== null && typeof policy === 'object' ? policy : FP_EVIDENCE_DEFAULT;
+  const kinds = fpArray(p.kinds);
+  return fpArray(links).filter(function (link) {
+    if (link === null || typeof link !== 'object') return false;
+    if (kinds.length === 0) return true;
+    return kinds.indexOf(link.kind) !== -1;
+  }).length;
+}
+
+function fpCanComplete(node, links, approvals, policy) {
   if (!node) return { ok: false, code: 'NOT_FOUND', error: '节点不存在' };
   const status = node.status;
   if (status === 'locked') return { ok: false, code: 'INVALID_STATE', error: '节点尚未解锁' };
@@ -489,7 +554,16 @@ function fpCanComplete(node, links, approvals) {
         error: '还需要' + missing.map((role) => (role === 'design' ? '设计' : '产品')).join('与') + '确认通过',
       };
     }
-    if (!fpHasDesignLink(links)) return { ok: false, code: 'NEED_DESIGN_LINK', error: '请先添加 设计稿链接作为确认依据' };
+    const evidence = fpEvidencePolicy(node, null, null);
+    const resolved = policy !== null && typeof policy === 'object' ? policy : evidence;
+    const minLinks = Number.isFinite(Number(resolved.minLinks)) ? Math.max(0, Math.round(Number(resolved.minLinks))) : 1;
+    if (minLinks > 0 && fpEvidenceCount(links, resolved) < minLinks) {
+      return {
+        ok: false,
+        code: 'NEED_EVIDENCE',
+        error: '请先补充确认依据：' + fpEvidenceText(resolved),
+      };
+    }
   }
   return { ok: true };
 }
@@ -608,7 +682,7 @@ const CSS_BASE = String.raw`
   --fp-font-lg: 15px;
   --fp-font-xl: 19px;
 
-  /* ===== 表面层级（背景色/浮层色，浅深成对）===== */
+  /* ===== 表面层级（设计系统 背景色/浮层色，浅深成对）===== */
   --fp-base: light-dark(#f6f7f8, #17181a);        /* bg-primary：应用底 */
   --fp-surface: light-dark(#ffffff, #1d1f23);     /* bg-white：卡片/抬高面 */
   --fp-surface-2: light-dark(#f1f2f3, #0d0e10);   /* bg-secondary：下沉面/嵌块 */
@@ -619,7 +693,7 @@ const CSS_BASE = String.raw`
   --fp-well: var(--fp-surface-2);
   --fp-mask: light-dark(rgba(13, 14, 16, 0.44), rgba(0, 0, 0, 0.62));
 
-  /* ===== 文本色（文本色）===== */
+  /* ===== 文本色（设计系统 文本色）===== */
   --fp-text: light-dark(#0d0e10, #f0f1f2);          /* text-dark / text-primary */
   --fp-text-dim: light-dark(#61666d, rgba(240, 241, 242, 0.62));   /* text-primary */
   --fp-text-tertiary: light-dark(#9499a0, rgba(240, 241, 242, 0.45)); /* text-secondary */
@@ -630,10 +704,10 @@ const CSS_BASE = String.raw`
   --fp-border-strong: light-dark(#e3e5e7, rgba(227, 229, 231, 0.1));
   --fp-line: var(--fp-border);
 
-  /* ===== 主色/强调/功能色（功能色与主题色）===== */
+  /* ===== 主色/强调/功能色（设计系统 功能色与业务主题色）===== */
   --fp-brand: light-dark(#0d0e10, #f0f1f2);         /* 主按钮填充（深色一 / 深色主题取反） */
   --fp-on-brand: light-dark(#ffffff, #0d0e10);      /* 深底字色 */
-  /* 主题色：紫色（品牌粉 同饱和度/明度的紫色变体，色相 275°） */
+  /* 主题色：紫色（设计系统 business-pink 同饱和度/明度的紫色变体，色相 275°） */
   --fp-accent: light-dark(#b753ff, #bb5cff);        /* 业务主题色 */
   --fp-accent-strong: light-dark(#ad3bff, #ae52f0); /* 强调字 */
   --fp-accent-soft: color-mix(in srgb, var(--fp-accent) 10%, transparent);

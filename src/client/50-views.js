@@ -415,6 +415,16 @@ function fpvSettingsDraft(settings) {
     weeklyDraftTime: src.weeklyDraftTime || '12:05',
     weeklyMeetingTime: src.weeklyMeetingTime || '17:00',
     weekStartsOn: String(typeof src.weekStartsOn === 'number' ? src.weekStartsOn : 1),
+    evidenceKinds: (function () {
+      const policy = src.evidencePolicy !== null && typeof src.evidencePolicy === 'object' ? src.evidencePolicy : {};
+      return Array.isArray(policy.kinds) ? policy.kinds.slice() : [];
+    })(),
+    evidenceMin: String((function () {
+      const policy = src.evidencePolicy !== null && typeof src.evidencePolicy === 'object' ? src.evidencePolicy : {};
+      const value = Number(policy.minLinks);
+      return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 1;
+    })()),
+    unlockPolicy: src.unlockPolicy === 'parallel' ? 'parallel' : 'linear',
   };
 }
 
@@ -1221,6 +1231,10 @@ function SettingsView({ state, derived, compact }) {
       return !/^\d{2}:\d{2}$/.test(String(item.value || ''));
     });
     if (missing.length) return '请填写完整的时间（HH:MM）：' + missing.map(function (item) { return item.label; }).join('、');
+    const min = Number(value.evidenceMin);
+    if (!Number.isFinite(min) || Math.round(min) !== min || min < 0 || min > 10) {
+      return '完成证据数需为 0~10 的整数';
+    }
     return null;
   }
 
@@ -1249,6 +1263,11 @@ function SettingsView({ state, derived, compact }) {
           weeklyDraftTime: draft.weeklyDraftTime,
           weeklyMeetingTime: draft.weeklyMeetingTime,
           weekStartsOn: Number(draft.weekStartsOn),
+          evidencePolicy: {
+            kinds: draft.evidenceKinds.slice(),
+            minLinks: Number(draft.evidenceMin),
+          },
+          unlockPolicy: draft.unlockPolicy === 'parallel' ? 'parallel' : 'linear',
         },
       });
       if (!response || response.ok === false) {
@@ -1518,6 +1537,53 @@ function SettingsView({ state, derived, compact }) {
       fpvSettingsGroup(fpvT('settings.workSlots', '工作时段'), '三个固定时段，用于节奏提示与静默判断', slotsChildren),
       fpvSettingsGroup('静默窗', '静默期间不推送普通提醒', silentChildren),
       fpvSettingsGroup(fpvT('settings.rhythm', '节奏与提醒'), '交接、周报草稿与周会的时间', rhythmChildren),
+      fpvSettingsGroup('完成与解锁', '双角色确认节点的完成证据条件，以及流程节点解锁方式', [
+        h(FpField, {
+          key: 'evidenceKinds',
+          label: '完成证据类型',
+          hint: '不选 = 任意类型；选中后只有这些类型的链接才算证据（可多选）',
+        },
+          h('div', { className: 'fp-v-chiprow' },
+            FP_EVIDENCE_KIND_LABELS && Object.keys(FP_EVIDENCE_KIND_LABELS).length > 0
+              ? Object.keys(FP_EVIDENCE_KIND_LABELS).map(function (kind) {
+                  const on = draft.evidenceKinds.indexOf(kind) !== -1;
+                  return h('button', {
+                    key: kind,
+                    type: 'button',
+                    className: 'fp-v-chip' + (on ? ' fp-v-chip--on' : ''),
+                    'aria-pressed': on ? 'true' : 'false',
+                    onClick: function () {
+                      updateDraft(function (next) {
+                        const index = next.evidenceKinds.indexOf(kind);
+                        if (index === -1) next.evidenceKinds.push(kind);
+                        else next.evidenceKinds.splice(index, 1);
+                      });
+                    },
+                  }, FP_EVIDENCE_KIND_LABELS[kind]);
+                })
+              : null
+          )
+        ),
+        h(FpField, { key: 'evidenceMin', label: '最少证据链接数', hint: '0 = 不需要证据（纯确认即可完成）' },
+          h(FpInput, {
+            type: 'number',
+            width: 96,
+            value: draft.evidenceMin,
+            onChange: function (value) { updateDraft(function (next) { next.evidenceMin = value; }); },
+          })
+        ),
+        h(FpField, { key: 'unlockPolicy', label: '节点解锁方式', hint: 'parallel = 完成一个节点后同流程其余节点一起解锁（支持多轨并行）' },
+          h(FpSelect, {
+            value: draft.unlockPolicy,
+            width: 220,
+            options: [
+              { value: 'linear', label: '线性：一次解锁下一个' },
+              { value: 'parallel', label: '并行：解锁整条流程' },
+            ],
+            onChange: function (value) { updateDraft(function (next) { next.unlockPolicy = value; }); },
+          })
+        ),
+      ]),
       fpvSettingsGroup('工作周', '周报统计与工作日计算', weekChildren),
       fpvSettingsGroup(fpvT('settings.data', '数据与备份'), '本地数据文件与维护操作', dataChildren),
       h(FpSyncPanel, { key: 'sync-panel' }),
@@ -2657,5 +2723,19 @@ const CSS_VIEWS = String.raw`
   display: flex;
   align-items: center;
   gap: var(--fp-sp-2);
+}
+
+/* ---- 设置：证据类型多选 chip ---- */
+.fp-v-chiprow{display:flex;flex-wrap:wrap;gap:8px;}
+.fp-v-chip{
+  height:28px;padding:0 12px;border:0;border-radius:var(--fp-radius-pill);
+  background:var(--fp-surface-2);color:var(--fp-text-dim);
+  font:inherit;font-size:var(--fp-font-xs);cursor:pointer;
+  transition:background-color 140ms ease,color 140ms ease;
+}
+.fp-v-chip:hover{background:var(--fp-pressed);color:var(--fp-text);}
+.fp-v-chip--on{
+  background:color-mix(in srgb,var(--fp-accent) 14%,transparent);
+  color:var(--fp-accent-strong);font-weight:600;
 }
 `;

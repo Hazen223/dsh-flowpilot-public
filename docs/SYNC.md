@@ -533,7 +533,7 @@ const CSS_SYNC = String.raw`...`
 
 ## 6. 验收
 
-- `node lib/selftest.mjs`：**150/150 全绿**（136 基线不回归 + **14 条冲突审阅用例**；
+- `node lib/selftest.mjs`：**179/179 全绿**（同步侧 150 条：136 基线 + 14 条冲突审阅用例；其余为节点模型 v2）；
   基线含 18 条 merge 用例）。冲突审阅主要覆盖点：
   `conflictDetails` 三方原始值 / label / 稳定 id（settings 也覆盖）、dryRun 也返回候选值且**不写**
   `sync-conflicts.json`、真实 merge 写 0600 文件且内容与 result 一致、无冲突 merge 把旧列表写成空数组、

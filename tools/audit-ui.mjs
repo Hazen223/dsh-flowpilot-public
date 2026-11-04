@@ -10,6 +10,9 @@
  *   node tools/audit-ui.mjs              # 全量报告（表格 + violation 明细）
  *   node tools/audit-ui.mjs --file=25-primitives.js
  *   node tools/audit-ui.mjs --strict     # 超标时退出码 1（用于收尾验收）
+ *
+ * 另外检查「<button> 忘了清原生边框」：原生按钮在浏览器里会画 2px outset 边框，
+ * 视觉上表现为奇怪的「双圈」（--fp-update-badge 曾踩过），必须显式 border:0。
  *   node tools/audit-ui.mjs --json       # 机器可读
  */
 import { readFileSync, readdirSync } from 'node:fs'
@@ -145,6 +148,39 @@ const totals = rows.reduce(
   { borders: 0, spacingBad: 0, hexBad: 0, dswTokens: 0 },
 )
 
+/* ---- 跨文件检查：用了 className 的 <button> 是否显式清了原生边框 ---- */
+function auditButtonBorders() {
+  const files = readdirSync(SRC).filter((name) => name.endsWith('.js'))
+  const text = files.map((name) => readFileSync(join(SRC, name), 'utf8'))
+  const css = text.map((t) => extractCss(t).join('\n')).join('\n')
+  const classes = new Set()
+  for (const t of text) {
+    for (const m of t.matchAll(/h\(\s*'button'\s*,\s*\{([\s\S]{0,400}?)\}\s*,/g)) {
+      const block = m[1]
+      const single = /className:\s*'([^']+)'/.exec(block)
+      if (single) classes.add(single[1].split(/\s+/)[0])
+      const flow = /className:\s*fpFlowClass\('([^']+)'/.exec(block)
+      if (flow) classes.add(flow[1])
+    }
+  }
+  const problems = []
+  for (const cls of classes) {
+    if (!cls.startsWith('fp-')) continue
+    const rule = new RegExp('\\.' + cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])[^{]*\\{([^}]*)\\}', 'g')
+    let found = false
+    let cleared = false
+    let m
+    while ((m = rule.exec(css))) {
+      found = true
+      if (/(^|[\s;{])border\s*:\s*(0|none)/.test(m[1]) || /border-width\s*:\s*0/.test(m[1])) cleared = true
+    }
+    if (found && !cleared) problems.push(cls)
+  }
+  return problems
+}
+
+const buttonBorders = auditButtonBorders()
+
 const violations = []
 for (const row of rows) {
   if (row.borders > row.budget) violations.push(`${row.file}: 描边 ${row.borders} 超过预算 ${row.budget}`)
@@ -153,9 +189,14 @@ for (const row of rows) {
   if (row.dswTokens > 0) violations.push(`${row.file}: ${row.dswTokens} 处仍引用 --dsw-alias-* 颜色令牌`)
 }
 if (totals.borders > TOTAL_BORDER_BUDGET) violations.push(`全量描边 ${totals.borders} 超过总预算 ${TOTAL_BORDER_BUDGET}`)
+if (buttonBorders.length > 0) {
+  violations.push(`按钮类没有显式 border:0（会显示原生双圈边框）：${buttonBorders.join('、')}`)
+}
+
+
 
 if (jsonMode) {
-  console.log(JSON.stringify({ rows, totals, violations }, null, 2))
+  console.log(JSON.stringify({ rows, totals, violations, buttonBorders }, null, 2))
 } else {
   console.log('file                 borders/budget   offGrid4   badHex   dswTokens')
   console.log('-'.repeat(72))

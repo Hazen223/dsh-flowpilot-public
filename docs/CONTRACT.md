@@ -7,7 +7,7 @@
 交付形态：DSH Harness **Web UI 插件**（Cordis bundle，profile = `desktop`）。
 所有 macOS / SwiftUI 相关表述**忽略**，改为浏览器内 React 面板。
 
-包目录：`<plugin-root>`
+包目录：`/Users/x`
 包名：`dsh-flowpilot`
 
 ---
@@ -312,7 +312,7 @@ flowpilot/
 `state.links` 元素新增**可选**字段（向后兼容，旧数据无此字段）：
 
 ```jsonc
-{ "id": "lk_1", "nodeId": "nd_2", "title": "设计稿文件", "url": "https://…",
+{ "id": "lk_1", "nodeId": "nd_2", "title": "设计稿 文件", "url": "https://…",
   "kind": "design", "createdAt": "ISO", "inheritedFrom": "nd_1" }
 ```
 
@@ -373,6 +373,77 @@ flowpilot/
 - 顶栏 ⟳ 即「立即同步」（调用 `/sync/run`，成功 toast 提示 direction，随后刷新 store）；
 - 客户端按 `settings.syncIntervalMinutes` 定时自动同步（页面隐藏时跳过），设置弹窗「同步节奏」可改间隔；
 - 同步面板仍复用原有 GitHub / WebDAV 配置界面与凭据存储（只存本机 0600 文件）。
+
+## 4.4 节点模型 v2：证据策略 / 并行解锁 / 归档保护 / 审批详情
+
+### A. 完成证据策略（替代写死的 设计稿 门槛）
+
+`evidencePolicy = { kinds: LinkKind[]（空=任意类型）, minLinks: 0~10 }`
+
+- 解析优先级：`node.evidencePolicy` → `project.evidencePolicy` → `settings.evidencePolicy` → 默认 `{ kinds: [], minLinks: 1 }`。
+- 完成门槛 = 双角色全部通过 **且** 满足证据策略（按 kinds 过滤后的链接数 ≥ minLinks）。
+- 不满足 → `NEED_EVIDENCE`（409），文案形如「请先补充确认依据：至少 1 条 任意类型 链接」。
+- 写接口：`updateSettings {patch:{evidencePolicy}}`、`updateProject {evidencePolicy|null}`（null=清除回落 settings）、`createProject`/`addProject` 可选传。
+- `NEED_DESIGN_LINK` 仅保留错误码常量，不再抛出。
+
+### B. 解锁策略与跳过未解锁节点
+
+- `settings.unlockPolicy: 'linear' | 'parallel'`（默认 linear），`project.unlockPolicy` 可覆盖。
+- `parallel`：完成/跳过节点时把**同流程所有仍 locked 的节点**一次性解锁（handoff 依赖逻辑不变）。
+- `skipNode` 允许对 `locked` 节点跳过（范围裁剪，原因必填，事件标注「范围裁剪」）；linear 下解锁其后的下一个 locked 节点，保证链条不断。
+
+### C. 归档项目写保护
+
+`startNode / completeNode / waitNode / blockNode / skipNode / reopenNode / approve / rejectApproval / setNodeSchedule / setNodeNotes / addNote / addLink / removeLink / addNode / removeNode / reorderNode / addFlow`
+在改动前统一 `assertProjectWritable`：归档项目 → `INVALID_STATE`（409）「项目「X」已归档，恢复后才能修改」。
+允许：`archiveProject`、`updateProject`（含 `archived:false`）、只读动作。
+
+### D. 审批详情与 waiting 细分
+
+- `node.approvalLog: [{ role, passed, by, at, comment, round }]`（approve/reject 都追加；`by` = actor，默认 `user`）。
+- `node.returnReason: { by, at, comment, round, fromRole }`（reject 时写入）。
+- `approve` 支持可选 `comment` / `by`。
+- `node.waitingKind: 'approval' | 'external' | 'queued'`：部分审批通过 → `approval`；`waitNode` → `external`；完成/跳过/重开/解锁后清空。
+- `derived.counts` 增加 `waitingApproval` / `waitingExternal`（`waiting` 总数语义不变）。
+
+### E. 编号与 actor
+
+- `addNode` 的 code = 同流程 `^X(\d+)$` 最大值 + 1（杜绝删节点后重复编号）；`reorderNode` 不改 code（code=身份，sortOrder=顺序）；支持显式 `code`（唯一性校验）。
+- `engine.dispatch(action, payload, { actor })`；事件对象带 `actor`（HTTP 默认 `'ui'`，agent 工具 `'agent'`），老事件读取时 fallback `'user'`。
+
+### F. 客户端
+
+- 设置 › 完成与解锁：证据类型多选 chip（不选=任意类型）、最少证据数、解锁方式（线性/并行）。
+- 节点详情：证据计数 chip（`证据 x/y`）、waiting 语义 chip（等对方确认 / 等外部跟进）、审批日志与退回原因、时间线显示非 user 操作者（AI）。
+- 未解锁节点也显示「跳过」（带范围裁剪提示）；归档项目详情只读。
+
+## 4.5 追加节点模板（appendTemplate）与 plannedAt
+
+### A. 模板分层
+
+- **流程模板**（`addFlow` 用）：`delivery`（设计交付 D01…）/ `acceptance`（验收 A01…）。
+- **节点包模板**（只能追加，不能开流程）：`experiment`（实验推进）：E01 预跑观测(+0d) → E02 5% 白名单(+7d) → E03 50% 灰度(+14d) → E04 推全(+21d)。
+  `addFlow({templateId:'experiment'})` → `INVALID_INPUT`。
+
+### B. `appendTemplate`
+
+`{ flowId, templateId: 'experiment', startAt?: ISO }`
+
+- 在流程末尾按 `sortOrder` 追加整套节点；code 用模板前缀 + 同流程同前缀最大数字 +1（连续追加不会撞号）。
+- 每个节点 `plannedAt = startAt（默认 ctx.now）+ offsetDays 天`。
+- 解锁：流里已有 ready/active/waiting/blocked 节点 → 追加节点全部 locked；否则首个 ready（parallel 策略下可全部 ready）。
+- 返回 `{ flowId, templateId, nodeIds, codes, plannedAt, appended }`；每节点写 `nodeAdded` 事件（含模板名与 code）。
+- 归档项目 → 409；未知 flow → 404；非节点包模板 → 400。
+
+### C. `plannedAt`
+
+- `node.plannedAt: ISO | null`（老数据补 null）；`setNodeSchedule` 支持设置/清除（非法 ISO → 400）。
+- 展示：节点卡「计划 X/X」chip；详情「计划与跟进 › 计划开始」。`code` 表示身份、`sortOrder` 表示顺序、`plannedAt` 表示计划时间，三者互不影响。
+
+### D. 客户端
+
+- 流程页头卡「追加节点模板」→ 弹窗（选流程 / 选模板 / 开始日期 / 阶段预览 E01–E04 与计划日）→ 提交 `appendTemplate`。
+- 节点卡与详情展示 plannedAt；详情「计划与跟进」可直接编辑。
 
 ## 5. Agent tool
 

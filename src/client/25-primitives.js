@@ -8,7 +8,7 @@ const CSS_PRIMITIVES = String.raw`
 /* ---------------------------------------------------------------- *
  * 基础控件：设计系统 2.0 视觉层（灰阶面替代描边）+ 4 栅格间距。
  * 颜色/圆角/字号一律来自 10-util.js CSS_BASE 的 --fp-* 令牌；
- * 不再引用宿主旧颜色令牌，不新增 HEX（主按钮按 UI-DESIGN §4 钉死的 设计值除外）。
+ * 不再引用宿主旧颜色令牌，不新增 HEX（主按钮按 UI-DESIGN §4 钉死的 设计系统 值除外）。
  * 唯一保留的 border 是 loading spinner 的环形描边（视觉必需，见 UI-DESIGN §4 例外）。
  * ---------------------------------------------------------------- */
 
@@ -63,7 +63,7 @@ const CSS_PRIMITIVES = String.raw`
   text-overflow: ellipsis;
 }
 .fp-btn--primary {
-  /* 填充与文字成对钉死（UI-DESIGN §4）：设计值 + light-dark 双模式，不依赖令牌链 */
+  /* 填充与文字成对钉死（UI-DESIGN §4）：设计系统 值 + light-dark 双模式，不依赖令牌链 */
   background: light-dark(#0d0e10, #f0f1f2);
   color: light-dark(#ffffff, #0d0e10);
   font-weight: 600;
@@ -611,7 +611,7 @@ const CSS_PRIMITIVES = String.raw`
   background: var(--fp-border);
 }
 
-/* Toast：深色浮层（brand 底 + on-brand 字），状态只染色图标 */
+/* Toast：设计系统 反向浮层（brand 底 + on-brand 字），状态只染色图标 */
 .fp-toast-host {
   position: fixed;
   left: 50%;

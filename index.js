@@ -149,7 +149,7 @@ async function executeTool(engine, aiService, logger, args, notifyWrite) {
   if (AI_TOOL_ACTIONS.includes(action)) return executeAiTool(action, aiService, logger, args)
   const payload = toPayload(args ?? {})
   try {
-    const out = engine.dispatch(action, payload)
+    const out = engine.dispatch(action, payload, { actor: 'agent' })
     // 写成功后主动触发一次同步（宿主侧防抖；失败不影响工具结果）
     if (!READONLY_TOOL_ACTIONS.has(action) && typeof notifyWrite === 'function') {
       try {

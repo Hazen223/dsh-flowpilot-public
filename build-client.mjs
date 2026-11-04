@@ -21,6 +21,7 @@
  * ./client.js; never edit client.js by hand.
  */
 import { readFile, writeFile, stat } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -44,6 +45,51 @@ const FILES = [
 ]
 
 const PKG = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+
+/* ---------------- 构建身份：版本 + git sha + dirty + channel ----------------
+ * 业界惯例：产物自带「哪一版、哪个提交、有没有本地改动」，排障时不用猜。
+ * channel：显式 FLOWPILOT_CHANNEL 优先；否则本地有未提交改动 → dev，干净 → release。
+ * 生成 build-info.json 供宿主 /update/status 读取（缺文件时宿主会回退到 package.json）。
+ */
+function gitOutput(args, { trim = true } = {}) {
+  try {
+    const out = execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    return trim ? out.trim() : out
+  } catch {
+    return ''
+  }
+}
+
+function computeBuildInfo(version) {
+  const sha = gitOutput(['rev-parse', '--short', 'HEAD']) || 'unknown'
+  // 注意：不能先 trim 整段输出——porcelain 格式里未暂存的改动是「 M path」，
+  // 去掉前导空格会让 slice(3) 误取到路径中段（曾导致 client.js 被漏判为「有本地改动」）。
+  const statusLines = gitOutput(['status', '--porcelain'], { trim: false }).split(/\r?\n/).filter(Boolean)
+  // client.js / build-info.json 是本脚本自己的产物，不计入「本地改动」
+  const dirty = statusLines.some((line) => {
+    const match = /^.. (.*)$/.exec(line)
+    const file = match ? match[1].trim() : line.trim()
+    return file !== 'client.js' && file !== 'build-info.json'
+  })
+  const explicit = String(process.env.FLOWPILOT_CHANNEL ?? '').toLowerCase()
+  const channel = ['dev', 'beta', 'release'].includes(explicit) ? explicit : dirty ? 'dev' : 'release'
+  const suffix = channel === 'dev' ? '-dev' : channel === 'beta' ? '-beta' : ''
+  const label = `${version}${suffix}+${sha}${dirty ? '.dirty' : ''}`
+  return { version, label, channel, sha, dirty, builtAt: new Date().toISOString() }
+}
+
+const BUILD_INFO = computeBuildInfo(PKG.version)
+/**
+ * 注入 client.js 的构建身份：只放「同一提交下稳定」的字段（version + channel）。
+ * label 含 sha（会随提交变化），只写 build-info.json，由宿主经 /update/status 下发。
+ * 不含 sha / dirty / builtAt —— 否则每次「构建→提交」都会改 SHA，CI 的
+ * `git diff --exit-code -- client.js` 永远无法通过。完整身份在 build-info.json（已 gitignore），
+ * 宿主读取后经 /flowpilot/api/update/status 下发。
+ */
+const CLIENT_BUILD_INFO = {
+  version: BUILD_INFO.version,
+  channel: BUILD_INFO.channel,
+}
 
 const problems = []
 const chunks = []
@@ -93,14 +139,16 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useReducer } = React;
-    const FP_BUILD = ${JSON.stringify(new Date().toISOString())};
+    const FP_BUILD = ${JSON.stringify(BUILD_INFO.version)};
+    const FP_BUILD_INFO = ${JSON.stringify(CLIENT_BUILD_INFO)};
 
 ${indent(chunks.join('\n'))}
 
     return {
       inject: FP_CLIENT_INJECT,
       apply: FP_CLIENT_APPLY,
-      version: FP_BUILD,
+      version: FP_BUILD_INFO.label,
+      buildInfo: FP_BUILD_INFO,
       // 离线冒烟测试入口（tests/client-smoke.mjs 使用；运行时不读取）。
       __test: {
         store: fpStore,
@@ -119,6 +167,10 @@ ${indent(chunks.join('\n'))}
 `
 
 await writeFile(OUT, output, 'utf8')
+await writeFile(join(root, 'build-info.json'), JSON.stringify(BUILD_INFO, null, 2) + '\n', 'utf8')
 const { size } = await stat(OUT)
 const lineCount = output.split('\n').length
 console.log(`build-client: wrote client.js (${(size / 1024).toFixed(1)} KiB, ${lineCount} lines) from ${FILES.length} fragments`)
+console.log(
+  `build-info: ${BUILD_INFO.label} (channel=${BUILD_INFO.channel}, sha=${BUILD_INFO.sha}, dirty=${BUILD_INFO.dirty})`,
+)

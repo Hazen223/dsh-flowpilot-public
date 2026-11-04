@@ -699,7 +699,7 @@ const CSS_QUICK = String.raw`
 .fp-quick{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none;font-size:var(--fp-font-sm)}
 .fp-quick>*{pointer-events:auto}
 .fp-quick-quiet{opacity:.88}
-.fp-quick-pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:var(--fp-radius-pill);background:var(--fp-surface);box-shadow:var(--fp-shadow-1);color:var(--fp-text);cursor:pointer;font-size:var(--fp-font-sm);transition:background-color 140ms ease,box-shadow 140ms ease}
+.fp-quick-pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:0;border-radius:var(--fp-radius-pill);background:var(--fp-surface);box-shadow:var(--fp-shadow-1);color:var(--fp-text);cursor:pointer;font:inherit;font-size:var(--fp-font-sm);appearance:none;-webkit-appearance:none;transition:background-color 140ms ease,box-shadow 140ms ease}
 .fp-quick-pill:hover{background:var(--fp-surface);box-shadow:var(--fp-shadow-2)}
 .fp-quick-pill-open{box-shadow:var(--fp-shadow-2)}
 .fp-quick-pill-idle{color:var(--fp-text-dim)}
