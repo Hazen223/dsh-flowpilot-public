@@ -100,6 +100,11 @@ function fpFlowLinkKindIcon(kind) {
   if (kind === 'design') return 'link';
   if (kind === 'figma') return 'spark';
   if (kind === 'doc') return 'report';
+  if (kind === 'chat') return 'chat';
+  if (kind === 'meeting') return 'note';
+  if (kind === 'dev') return 'branch';
+  if (kind === 'test') return 'test';
+  if (kind === 'ref') return 'book';
   return 'external';
 }
 
@@ -264,7 +269,7 @@ function fpFlowSection(title, options, ...children) {
       { className: 'fp-detail-sec-head' },
       h('span', { className: 'fp-detail-sec-title' }, title),
       opts.hint ? h('span', { className: 'fp-detail-sec-hint' }, opts.hint) : null,
-      opts.actions || null,
+      opts.actions ? h('span', { className: 'fp-detail-sec-actions' }, opts.actions) : null,
     ),
     ...children,
   );
@@ -811,30 +816,34 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
           archived ? h(FpChip, { tone: 'warn', dot: true }, '已归档 · 只读') : null,
           !archived
             ? h(
-                FpButton,
-                {
-                  size: 'sm',
-                  variant: 'default',
-                  icon: 'plus',
-                  disabled: flows.length === 0,
-                  title: flows.length === 0 ? '先创建一个流程，再追加节点模板' : '把一套节点模板追加到已有流程（如「实验推进」）',
-                  onClick: openAppendTemplate,
-                },
-                '追加节点模板',
-              )
-            : null,
-          !archived
-            ? h(
-                FpButton,
-                {
-                  size: 'sm',
-                  variant: 'default',
-                  icon: 'plus',
-                  disabled: hasAcceptance,
-                  title: hasAcceptance ? '项目已包含验收流程' : '为项目添加验收流程（A 系列节点）',
-                  onClick: requestAddFlow,
-                },
-                '添加验收流程',
+                'div',
+                { key: 'btns', className: 'fp-flow-head-btns' },
+                h(
+                  FpButton,
+                  {
+                    key: 'append',
+                    size: 'sm',
+                    variant: 'default',
+                    icon: 'plus',
+                    disabled: flows.length === 0,
+                    title: flows.length === 0 ? '先创建一个流程，再追加节点模板' : '把一套节点模板追加到已有流程（如「实验推进」）',
+                    onClick: openAppendTemplate,
+                  },
+                  '追加节点模板',
+                ),
+                h(
+                  FpButton,
+                  {
+                    key: 'acceptance',
+                    size: 'sm',
+                    variant: 'quiet',
+                    icon: 'plus',
+                    disabled: hasAcceptance,
+                    title: hasAcceptance ? '项目已包含验收流程' : '为项目添加验收流程（A 系列节点）',
+                    onClick: requestAddFlow,
+                  },
+                  '添加验收流程',
+                ),
               )
             : null,
         ),
@@ -1873,7 +1882,10 @@ const CSS_FLOW = String.raw`
   height: 100%;
   min-height: 0;
   min-width: 0;
-  background: transparent;
+  /* 节点区的灰底从顶部开始：延伸到项目信息卡后面（只铺背景，不影响任何元素位置） */
+  background: var(--fp-well);
+  border-radius: var(--fp-radius-lg);
+  overflow: hidden;
   color: var(--fp-text);
   font-size: var(--fp-font-md);
   line-height: 1.55;
@@ -1917,6 +1929,8 @@ const CSS_FLOW = String.raw`
 .fp-flow-head {
   /* 头部左右内边距做成变量：底部流程进度条要用同值负 margin 通栏 */
   --fp-head-pad-x: var(--fp-sp-5);
+  container-type: inline-size;
+  container-name: flowhead;
   flex: 0 0 auto;
   margin: 0;
   padding: var(--fp-sp-4) var(--fp-head-pad-x);
@@ -1981,16 +1995,31 @@ const CSS_FLOW = String.raw`
   display: flex;
   align-items: center;
   gap: var(--fp-sp-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex: 0 0 auto;
+  /* 固定在信息卡右侧，不随标题换行漂移 */
+  margin-left: auto;
+}
+.fp-flow-head-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-sp-2);
+}
+/* 宽度不够时两个按钮竖排（一上一下），仍贴右边 */
+@container (max-width: 560px) {
+  .fp-flow-head-btns {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--fp-sp-1);
+  }
 }
 .fp-flow-progress {
   display: flex;
   align-items: center;
   gap: var(--fp-sp-2);
-  /* 抵消 .fp-flow-head 的左右内边距：进度条通栏铺满信息卡 */
-  margin: var(--fp-sp-4) calc(-1 * var(--fp-head-pad-x)) 0;
-  padding: 0 var(--fp-sp-2);
+  /* 与上面的标题/标签共用信息卡内边距：左右贴齐内容边，轨道自身仍撑满可用宽度 */
+  margin: var(--fp-sp-4) 0 0;
+  padding: 0;
   flex-wrap: wrap;
 }
 .fp-flow-progress-label { font-size: var(--fp-font-xs); color: var(--fp-text-tertiary); }
@@ -2044,6 +2073,21 @@ const CSS_FLOW = String.raw`
   border-radius: var(--fp-radius-lg);
   background: var(--fp-well);
   scrollbar-width: thin;
+  /* 滚动边缘用「透明度渐变」淡出（不是毛玻璃）：内容滚出视口时 alpha 逐渐降到 0，避免硬截断 */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgb(0 0 0) 32px,
+    rgb(0 0 0) calc(100% - 32px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgb(0 0 0) 32px,
+    rgb(0 0 0) calc(100% - 32px),
+    transparent 100%
+  );
 }
 .fp-flow-inner {
   /* 节点行距：竖线用同一个值做负方向延伸，保证相邻节点间连线无缝 */
@@ -2547,6 +2591,14 @@ const CSS_FLOW = String.raw`
   color: var(--fp-text-tertiary);
   white-space: nowrap;
 }
+/* 分组操作（编辑 / 添加 / 收起等）统一贴右，与标题分离 */
+.fp-detail-sec-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fp-sp-1);
+  margin-left: auto;
+  flex: none;
+}
 .fp-detail-archived {
   display: flex;
   align-items: center;
@@ -2593,7 +2645,8 @@ const CSS_FLOW = String.raw`
   color: var(--fp-ok);
   background: color-mix(in srgb, var(--fp-ok) 12%, transparent);
 }
-.fp-detail-actions { display: flex; flex-direction: column; gap: var(--fp-sp-2); }
+/* 主操作与下方次要操作行：上下间距 12px；横向按钮之间仍为 8px */
+.fp-detail-actions { display: flex; flex-direction: column; gap: var(--fp-sp-3); }
 .fp-detail-action-row { display: flex; gap: var(--fp-sp-2); }
 .fp-detail-action-row > * { flex: 1 1 0; min-width: 0; }
 .fp-detail-approval-list { display: flex; flex-direction: column; gap: var(--fp-sp-2); }

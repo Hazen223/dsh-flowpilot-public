@@ -345,7 +345,7 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 0 4px 8px;
+  padding: 0 0 8px;
   scrollbar-width: thin;
 }
 .fp-nav__empty {
@@ -370,6 +370,28 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+/* 左栏底部两个按钮：尺寸/字重统一，图标固定在左侧、文字真正居中 */
+.fp-nav__actions > .fp-btn {
+  position: relative;
+  justify-content: center;
+  height: 32px;
+  padding: 0 var(--fp-sp-6);
+  font-size: var(--fp-font-sm);
+  font-weight: 500;
+}
+.fp-nav__actions > .fp-btn--primary {
+  font-weight: 500;
+}
+.fp-nav__actions > .fp-btn > .fp-btn__icon {
+  position: absolute;
+  left: var(--fp-sp-2);
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+}
+.fp-nav__actions > .fp-btn > .fp-btn__label {
+  text-align: center;
 }
 .fp-nav__status {
   display: flex;
@@ -407,7 +429,7 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 8px 8px 4px;
+  padding: 8px 12px 4px;
 }
 .fp-line__name {
   min-width: 0;
@@ -455,19 +477,22 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   color: var(--fp-text);
 }
 .fp-line__empty {
-  margin: 0 8px 8px;
+  margin: 0 12px 8px;
   font-size: var(--fp-font-xs);
   color: var(--fp-text-quaternary);
 }
 .fp-project {
   position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
+  align-items: center;
+  gap: var(--fp-sp-2);
+  /* button 的 auto 宽度是 shrink-to-fit：长标题会把整行撑出侧栏，必须显式占满（减去左右外边距） */
+  width: calc(100% - var(--fp-sp-3) * 2);
   min-width: 0;
-  margin: 0 0 4px;
-  padding: 8px;
+  /* 卡片上下间距 8px */
+  margin: 0 var(--fp-sp-3) var(--fp-sp-2);
+  padding: var(--fp-sp-2);
+  overflow: hidden;
   border: 0;
   border-radius: var(--fp-radius-md);
   background: transparent;
@@ -489,58 +514,78 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
 .fp-project[data-archived="true"] {
   opacity: 0.72;
 }
+.fp-project__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-sp-1);
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow: hidden;
+}
+/* 与悬浮弹窗的 .fp-quick-row 排版保持一致：标题行 12px + 10px 等宽编号 chip */
+.fp-project__head {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-sp-2);
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fp-font-sm);
+}
 .fp-project__code {
   flex: none;
-  min-width: 32px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 4px;
   border: 0;
   border-radius: var(--fp-radius-sm);
   background: var(--fp-surface-2);
-  color: var(--fp-text-tertiary);
+  color: var(--fp-text-dim);
   font-family: var(--fp-mono);
   font-size: 10px;
-  font-weight: 650;
-  line-height: 1.5;
+  letter-spacing: .03em;
+  line-height: 16px;
   text-align: center;
 }
 .fp-project[data-active="true"] .fp-project__code {
   background: color-mix(in srgb, var(--fp-accent) 12%, transparent);
   color: var(--fp-accent);
 }
-.fp-project__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .fp-project__title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
-  line-height: 1.35;
+  font-size: var(--fp-font-sm);
+  font-weight: 500;
+  line-height: 1.3;
   color: inherit;
 }
 .fp-project[data-active="true"] .fp-project__title {
   font-weight: 600;
-  color: var(--fp-text);
 }
+/* 第二行：业务线 · 阶段 + 内联截止日（同悬浮弹窗 meta 行） */
 .fp-project__sub {
+  margin: 0;
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fp-font-xs);
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--fp-text-tertiary);
 }
 .fp-project__meta {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex: none;
+  gap: var(--fp-sp-2);
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fp-font-xs);
+  color: var(--fp-text-tertiary);
 }
 .fp-project__dot {
   width: 8px;
@@ -558,29 +603,35 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   background: var(--fp-bad);
 }
 .fp-project__due {
-  font-size: 10px;
-  color: var(--fp-text-tertiary);
+  flex: none;
+  font-size: var(--fp-font-xs);
+  font-weight: 500;
+  color: var(--fp-warn-strong);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .fp-project__due[data-overdue="true"] {
   color: var(--fp-bad);
 }
+.fp-project__due[data-tone="today"] {
+  color: var(--fp-warn-strong);
+}
+.fp-project__due[data-tone="soon"] {
+  color: var(--fp-warn-strong);
+}
+/* 进度条绝对定位：不再作为 flex 子项占位（否则会挤压右侧截止日，且不再是整行宽度） */
 .fp-project__progress {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 4px;
-  height: 2px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 0 0 var(--fp-radius-md) var(--fp-radius-md);
   overflow: hidden;
   border-radius: var(--fp-radius-pill);
   background: var(--fp-surface-2);
-  opacity: 0;
-  transition: opacity 140ms ease;
-}
-.fp-project:hover .fp-project__progress,
-.fp-project[data-active="true"] .fp-project__progress {
   opacity: 1;
+  transition: background-color 140ms ease;
 }
 .fp-project__progress > span {
   display: block;
@@ -590,14 +641,14 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
 }
 .fp-archived {
   position: relative;
-  margin-top: 8px;
+  margin: 8px 12px 0;
   padding-top: 8px;
 }
 .fp-archived::before {
   content: "";
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  right: 0;
   top: 0;
   height: 1px;
   background: var(--fp-border);
@@ -655,6 +706,42 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   overflow: hidden;
   background: var(--fp-surface);
   border-radius: var(--fp-radius-lg);
+  /* 收起/展开：宽度走 expo-out 缓动（非线性），内容再做一次轻微位移淡入 */
+  transition:
+    flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    width 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 200ms ease;
+  will-change: flex-basis, width;
+}
+.fp-side__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  animation: fp-side-panel-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fp-side__rail-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--fp-sp-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--fp-sp-2) 0;
+  animation: fp-side-rail-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fp-side-panel-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fp-side-rail-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fp-side { transition: none; }
+  .fp-side__panel, .fp-side__rail-inner { animation: none; }
 }
 .fp-side--overlay {
   position: absolute;
@@ -665,11 +752,8 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   box-shadow: var(--fp-shadow-3);
 }
 .fp-side--rail {
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 40px;
-  width: 40px;
-  padding: 8px 0;
+  flex: 0 0 44px;
+  width: 44px;
   box-shadow: var(--fp-shadow-1);
 }
 .fp-side__rail-label {
@@ -979,43 +1063,7 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   }
 }
 
-/* ---- 项目条目：包裹层 / 更多按钮 / 右键菜单（无描边，面层级 + 阴影） ---- */
-.fp-project-wrap {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-}
-.fp-project-wrap > .fp-project {
-  flex: 1 1 auto;
-}
-.fp-project__more {
-  position: absolute;
-  right: var(--fp-sp-1);
-  top: var(--fp-sp-2);
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--fp-radius-sm);
-  background: transparent;
-  color: var(--fp-text-tertiary);
-  cursor: pointer;
-  opacity: .45;
-  transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
-}
-.fp-project-wrap:hover .fp-project__more,
-.fp-project__more:focus-visible,
-.fp-project__more[aria-expanded="true"] {
-  opacity: 1;
-}
-.fp-project__more:hover {
-  background: var(--fp-hover);
-  color: var(--fp-text);
-}
+/* ---- 右键菜单（无描边，面层级 + 阴影） ---- */
 .fp-ctxmenu {
   position: fixed;
   z-index: 90;
@@ -1053,23 +1101,6 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   height: 1px;
   background: var(--fp-border);
   margin: var(--fp-sp-1) 0;
-}
-
-/* ---- 项目条目排版：右侧为「⋯」预留空间，避免与截止/状态重叠 ---- */
-.fp-project {
-  align-items: center;
-  padding: var(--fp-sp-2) 32px var(--fp-sp-2) var(--fp-sp-2);
-}
-.fp-project__meta {
-  align-self: center;
-}
-.fp-project__more {
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: .38;
-}
-.fp-project-wrap:hover .fp-project__more {
-  opacity: .9;
 }
 
 /* ---- 右栏：收起按钮整合到边栏顶部（与收起态 rail 的展开按钮同一位置） ---- */
@@ -2463,6 +2494,10 @@ function FpRoot() {
     const archived = project.status === 'archived';
     const active = project.id === selectedProjectId;
     const progress = info !== null && typeof info.progress === 'number' ? fpClamp(info.progress, 0, 1) : null;
+    const ownerLine = lines.filter(function (item) { return item !== null && item !== undefined && item.id === project.businessLineId; })[0];
+    const lineName = ownerLine !== null && ownerLine !== undefined && typeof ownerLine.name === 'string' ? ownerLine.name : '';
+    const subText = (lineName !== '' ? lineName + ' · ' : '') + stage;
+    const dueTone = overdue ? 'error' : daysLeft === 0 ? 'today' : daysLeft === 1 ? 'soon' : '';
     const title = (project.title || '未命名项目') + ' · ' + stage + (dueText !== '' && dueText !== '—' ? ' · ' + dueText : '');
     const row = h(
       'button',
@@ -2497,26 +2532,23 @@ function FpRoot() {
           openProjectMenu(project.id, rect !== null ? rect.left + 16 : 0, rect !== null ? rect.bottom : 0);
         },
       },
-      h('span', { className: 'fp-project__code' }, code),
       h(
         'span',
         { className: 'fp-project__main' },
-        h('span', { className: 'fp-project__title' }, project.title || '未命名项目'),
-        h('span', { className: 'fp-project__sub' }, stage),
-      ),
-      h(
-        'span',
-        { className: 'fp-project__meta' },
-        dotTone !== ''
-          ? h('span', {
-              className: 'fp-project__dot',
-              'data-tone': dotTone,
-              title: dotTone === 'warn' ? '有需要跟进的节点' : dotTone === 'error' ? '有逾期节点' : '有待推进节点',
-            })
-          : null,
-        dueText !== '' && dueText !== '—'
-          ? h('span', { className: 'fp-project__due', 'data-overdue': overdue ? 'true' : 'false' }, dueText)
-          : null,
+        h(
+          'span',
+          { className: 'fp-project__head' },
+          h('span', { className: 'fp-project__code' }, code),
+          h('span', { className: 'fp-project__title' }, project.title || '未命名项目'),
+        ),
+        h(
+          'span',
+          { className: 'fp-project__meta' },
+          h('span', { className: 'fp-project__sub', title: subText }, subText),
+          dueText !== '' && dueText !== '—'
+            ? h('span', { className: 'fp-project__due', 'data-overdue': overdue ? 'true' : 'false', 'data-tone': dueTone }, dueText)
+            : null,
+        ),
       ),
       progress !== null
         ? h(
@@ -2526,27 +2558,7 @@ function FpRoot() {
           )
         : null,
     );
-    const moreButton = h(
-      'button',
-      {
-        key: 'more',
-        type: 'button',
-        className: 'fp-project__more',
-        title: '更多操作（右键项目行同款菜单）',
-        'aria-label': '项目更多操作',
-        'aria-haspopup': 'menu',
-        'aria-expanded': menuOpen && ctxMenu !== null && ctxMenu.projectId === project.id ? 'true' : 'false',
-        onClick: function (event) {
-          if (event && typeof event.preventDefault === 'function') event.preventDefault();
-          if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
-          const target = event && event.currentTarget ? event.currentTarget : null;
-          const rect = target && typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
-          openProjectMenu(project.id, rect ? rect.left - 160 : 0, rect ? rect.bottom + 4 : 0);
-        },
-      },
-      h(FpIcon, { name: 'more', size: 13 }),
-    );
-    return h('div', { className: 'fp-project-wrap', key: project.id }, row, moreButton);
+    return row;
   }
 
   function renderLine(line) {
@@ -2801,57 +2813,73 @@ function FpRoot() {
   }
 
   function renderSide() {
-    if (detailCollapsed) {
-      if (narrow || mid) return null;
-      if (selectedNode === null) return null;
-      return h(
-        'aside',
-        { className: 'fp-side fp-side--rail', key: 'side', 'aria-label': '节点详情（已收起）' },
-        h(
-          FpIconButton,
-          {
-            label: '展开节点详情',
-            title: '展开节点详情',
-            size: 24,
-            onClick: function () {
-              setDetailCollapsed(false);
-            },
-          },
-          h(FpIcon, { name: 'chevron-right', size: 13, className: 'fp-icon--flip' }),
-        ),
-        h('span', { className: 'fp-side__rail-label' }, selectedNode.code || '详情'),
-      );
-    }
-    if (selectedNode === null && mid) return null;
+    const collapsed = detailCollapsed === true;
+    // 窄屏/中屏保持原行为：收起时直接不占位（浮层模式下也不做折叠动画）
+    if (collapsed && (narrow || mid)) return null;
+    if (!collapsed && selectedNode === null && mid) return null;
+    // 没有选中任何节点时也保持不渲染（避免空 rail）
+    if (selectedNode === null && collapsed) return null;
+
+    const classes = ['fp-side'];
+    if (mid) classes.push('fp-side--overlay');
+    if (collapsed) classes.push('fp-side--rail');
+
     return h(
       'aside',
-      { className: 'fp-side' + (mid ? ' fp-side--overlay' : ''), key: 'side', 'aria-label': '节点详情' },
-      h(
-        'div',
-        { className: 'fp-side__bar' },
-        h(
-          FpIconButton,
-          {
-            label: '收起节点详情',
-            title: '收起节点详情',
-            size: 24,
-            onClick: function () {
-              setDetailCollapsed(true);
-            },
-          },
-          h(FpIcon, { name: 'chevron-right', size: 13 }),
-        ),
-      ),
-      selectedNode !== null && detailProject !== null
-        ? h(NodeDetail, {
-            state: s,
-            derived: d,
-            project: detailProject,
-            node: selectedNode,
-            onClose: handleCloseDetail,
-            onRequestDialog: handleNodeDialogRequest,
-          })
-        : renderSidePlaceholder(),
+      {
+        className: classes.join(' '),
+        key: 'side',
+        'data-collapsed': collapsed ? 'true' : 'false',
+        'aria-label': collapsed ? '节点详情（已收起）' : '节点详情',
+      },
+      collapsed
+        ? h(
+            'div',
+            { className: 'fp-side__rail-inner' },
+            h(
+              FpIconButton,
+              {
+                label: '展开节点详情',
+                title: '展开节点详情',
+                size: 24,
+                onClick: function () {
+                  setDetailCollapsed(false);
+                },
+              },
+              h(FpIcon, { name: 'chevron-right', size: 13, className: 'fp-icon--flip' }),
+            ),
+            h('span', { className: 'fp-side__rail-label' }, selectedNode.code || '详情'),
+          )
+        : h(
+            'div',
+            { className: 'fp-side__panel' },
+            h(
+              'div',
+              { className: 'fp-side__bar' },
+              h(
+                FpIconButton,
+                {
+                  label: '收起节点详情',
+                  title: '收起节点详情',
+                  size: 24,
+                  onClick: function () {
+                    setDetailCollapsed(true);
+                  },
+                },
+                h(FpIcon, { name: 'chevron-right', size: 13 }),
+              ),
+            ),
+            selectedNode !== null && detailProject !== null
+              ? h(NodeDetail, {
+                  state: s,
+                  derived: d,
+                  project: detailProject,
+                  node: selectedNode,
+                  onClose: handleCloseDetail,
+                  onRequestDialog: handleNodeDialogRequest,
+                })
+              : renderSidePlaceholder(),
+          ),
     );
   }
 

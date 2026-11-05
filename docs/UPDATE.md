@@ -94,12 +94,15 @@
 ## 2.5 发布与通道（release 产物）
 
 ```bash
-npm run release:check      # 本地门禁：build + selftest + smoke + UI audit
-git tag v1.6.0 && git push origin v1.6.0   # CI：.github/workflows/release.yml → GitHub Release + changelog
+npm run release -- --version=1.6.1     # 门禁 → 升版本 → 构建 → 提交 → tag → push → GitHub Release（含产物）
+npm run release -- --resume=v1.6.0     # 只给已有 tag 补 Release 资产（从 tag 工作树干净构建）
+npm run release:check                  # 只跑门禁（build + selftest + client smoke + UI 审计）
 ```
 
-- CI（`.github/workflows/ci.yml`）：push/PR 跑 build、语法检查、selftest、client smoke、UI 审计，并校验**提交进仓库的 `client.js` 与源码一致**；
-- Release（`.github/workflows/release.yml`）：打 `v*` tag 触发，跑同一套门禁后创建 Release，附 `client.js` 与 `build-info.json`（安装来源仍是 git tag）；
+- **发布以本地 `tools/release.mjs` 为准**：公共仓库的 GitHub-hosted runner 没有配额（tag 推送后 run 会永久 `queued`），
+  因此两个 workflow 改成手动触发（`workflow_dispatch`），Actions 恢复后把 `push`/`tags` 触发加回去即可；
+- **Release 标题固定为版本号**（等于 tag 名，如 `v1.6.1`），变更说明只写正文；发布脚本创建后会校验标题（不一致自动改回）；
+- 每次发布都会把 `client.js` 与 `build-info.json`（干净构建：`channel=release`、`dirty=false`、带 sha）挂到 Release；
 - 通道：`FLOWPILOT_CHANNEL=release|beta|dev` 可强制构建通道；本地有未提交改动默认 `dev`（`label` 带 `.dirty`）；
 - 开发机：`npm run dev:link` 把 profile 指向本仓库源码；`npm run dev:check` 检查是否仍直连（被 `pnpm install` 冲掉时退出码 1）。
 

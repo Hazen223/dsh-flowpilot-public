@@ -86,11 +86,6 @@ const BUILD_INFO = computeBuildInfo(PKG.version)
  * `git diff --exit-code -- client.js` 永远无法通过。完整身份在 build-info.json（已 gitignore），
  * 宿主读取后经 /flowpilot/api/update/status 下发。
  */
-const CLIENT_BUILD_INFO = {
-  version: BUILD_INFO.version,
-  channel: BUILD_INFO.channel,
-}
-
 const problems = []
 const chunks = []
 
@@ -140,15 +135,13 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useReducer } = React;
     const FP_BUILD = ${JSON.stringify(BUILD_INFO.version)};
-    const FP_BUILD_INFO = ${JSON.stringify(CLIENT_BUILD_INFO)};
 
 ${indent(chunks.join('\n'))}
 
     return {
       inject: FP_CLIENT_INJECT,
       apply: FP_CLIENT_APPLY,
-      version: FP_BUILD_INFO.label,
-      buildInfo: FP_BUILD_INFO,
+      version: FP_BUILD,
       // 离线冒烟测试入口（tests/client-smoke.mjs 使用；运行时不读取）。
       __test: {
         store: fpStore,

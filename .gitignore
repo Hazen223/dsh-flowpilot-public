@@ -4,3 +4,4 @@ node_modules/
 .venv/
 # 构建产物：每次 build 生成，不入库（排障时看本地或 CI 产物）
 build-info.json
+.release-notes.md

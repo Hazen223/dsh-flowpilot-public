@@ -121,7 +121,7 @@ flowpilot/
     "notes": "", "round": 1
   }],
   "dependencies": [{ "fromNodeId": "nd_1", "toNodeId": "nd_2", "relation": "sequence|return|handoff" }],
-  "links": [{ "id": "lk_1", "nodeId": "nd_1", "title": "设计稿交互框架", "url": "https://...", "kind": "design|figma|doc|other", "createdAt": "ISO" }],
+  "links": [{ "id": "lk_1", "nodeId": "nd_1", "title": "设计稿交互框架", "url": "https://...", "kind": "design|figma|doc|chat|meeting|dev|test|ref|other", "createdAt": "ISO" }],
   "events": [{ "id": "ev_1", "projectId": "pr_1", "flowId": "fl_1", "nodeId": "nd_1|null",
                "kind": "nodeStatus|approvalPassed|approvalRejected|revision|unlocked|projectCreated|flowAdded|linkAdded|scheduleChanged|handoffSaved|reportGenerated|reportEdited|projectUpdated|projectArchived|nodeAdded|nodeRemoved|settingsChanged|manualNote|seeded",
                "timestamp": "ISO", "details": "中文描述", "round": 1 }],
@@ -323,6 +323,23 @@ flowpilot/
 - 删除项目需二次确认（展示项目名与将删除的节点数、说明「删除前自动备份、不可撤销」），
   成功后刷新数据；若删除的是当前选中项目则清空选中。
 - 节点详情的「关联链接」中，带 `inheritedFrom` 的链接显示「继承」小标（title 提示继承来源节点 code）。
+
+## 4.2.1 链接类型（kind）
+
+| kind | 标签 | 典型用途 |
+|---|---|---|
+| `design` | 设计稿 | 交互稿 / 设计产物 |
+| `figma` | Figma | Figma 文件 |
+| `doc` | 需求文档 | PRD、需求说明 |
+| `chat` | AI 讨论 | 和 GPT / Claude 等的讨论记录、会话分享 |
+| `meeting` | 会议纪要 | 评审会、对齐会记录 |
+| `dev` | 开发实现 | PR / 分支 / 代码仓库 |
+| `test` | 测试验收 | 用例、验收记录 |
+| `ref` | 参考资料 | 竞品、行业资料、外部参考 |
+| `other` | 其他 | 兜底 |
+
+- 新增类型只做**追加**，历史数据里的旧 `kind` 继续合法（向后兼容）；
+- `evidencePolicy.kinds` 可取上述任意组合（例如只认「AI 讨论」或「测试验收」）。
 
 ## 4.3 同步：最新覆盖（newest-wins）+ 自动同步间隔
 

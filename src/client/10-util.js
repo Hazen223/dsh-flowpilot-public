@@ -40,6 +40,11 @@ const FP_LINK_KINDS = [
   { value: 'design', label: '设计稿' },
   { value: 'figma', label: 'Figma' },
   { value: 'doc', label: '需求文档' },
+  { value: 'chat', label: 'AI 讨论' },
+  { value: 'meeting', label: '会议纪要' },
+  { value: 'dev', label: '开发实现' },
+  { value: 'test', label: '测试验收' },
+  { value: 'ref', label: '参考资料' },
   { value: 'other', label: '其他' },
 ];
 

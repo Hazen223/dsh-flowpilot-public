@@ -90,13 +90,24 @@
 - **布局：白卡直接浮在 `--fp-base` 灰底上**，卡片之间只留 12px 间隙，不画描边、不叠双层边框。
 - 左栏项目导航 = 一张白色卡片（`--fp-surface` + `--fp-radius-lg`）；
   行级状态：hover `--fp-hover`、选中 `--fp-surface-2` + `--fp-shadow-1`。
+- 左栏底部操作（`.fp-nav__actions`）：两个按钮统一 32px 高 / 12px / 字重 500 / 左右内边距 24px；
+  图标绝对定位在左侧 8px，**文字相对按钮真正居中**（不是「图标 + 文字」整体居中），避免两个按钮看起来一大一小。
+- **项目条目卡片排版**（左栏，对齐悬浮弹窗 `fp-quick-row` 的排版语言）：左右外边距 12、卡片上下间距 8、内边距 8、圆角 8；
+  结构为 `main` 两行——`head`（10px 等宽编号 chip（surface-2 / 16px 行高）· 8px · 12px 标题）→ `meta`（11px 三级灰的「业务线 · 阶段」+ 内联截止日，橙色 `--fp-warn-strong`、逾期转红，间距 8）；
+  底部 `进度条` absolute 贴卡底（left/right 0 / bottom 0 / 3px 高 / 下圆角与卡片一致，常显）；行 `overflow: hidden` + 标题省略号，长标题不会撑破侧栏；
+  不设右侧「⋯」按钮（更多操作走右键菜单 / `Shift+F10`）。
+- 流程信息卡的操作区（`.fp-flow-head-actions`）**固定贴右**（`margin-left:auto`，不换行）；
+  主操作「追加节点模板」用 `default` 实心按钮，次操作「添加验收流程」用 `quiet` 文字按钮（两者不同色）；
+  信息卡是容器查询容器（`container-type: inline-size`），`@container (max-width: 560px)` 时两个按钮**竖排一上一下**，仍贴右边。
 - 中栏流程页 = **两张独立卡片**（`.fp-flow` 用 `gap: 12px` 分隔）：
-  1. **项目信息卡** `.fp-flow-head`：业务线 / 项目名 / 截止 / 阶段 chip / 操作按钮 / 流程进度条 / 归档提示；
+  1. **项目信息卡** `.fp-flow-head`：业务线 / 项目名 / 截止 / 阶段 chip / 操作按钮 / 流程进度条（左右与内容对齐，轨道撑满可用宽度）/ 归档提示；
   2. **项目节点卡** `.fp-flow-canvas`：**灰井铺满整卡，不再套白边**（`padding: 0`，`background: var(--fp-well)`，圆角 12 靠 `overflow: auto` 裁切）。
      井内元素层级：普通/当前节点卡 = `--fp-surface`（白/深面）浮起；已完成/锁定 = `color-mix(井色 40%, 卡片色 60%)` 退后一档；
      进度轨道与节点圆点 = `--fp-pressed`；桥接块/占位提示 = `--fp-surface`。
      `--fp-well` 默认等于 `--fp-surface-2`，要整体加深/变浅只改 10-util 里这一行。
 - 其它视图（今日/周报/交接/设置）= 各自内容卡片直接排在 `--fp-base` 灰底上（`.fp-v-root` 透明，自带 16/20/32 内边距）。
+- 节点详情各分组的操作（编辑 / 添加 / 收起等）统一**贴内容右缘**（`.fp-detail-sec-actions { margin-left: auto }`），不跟标题挤在一起。
+- 节点详情「推进节点」区（`.fp-detail-actions`）：主操作与下方次要操作行之间 **gap 12px**，同一行内的次要按钮横向 gap 8px。
 - 右栏节点详情 = 一张白卡，卡内用 `--fp-surface-2` 灰面分组（双角色确认 / 推进节点 / 计划与跟进 / 关联链接 / 笔记）。
 - 顶栏本身透明、不画卡片；只放按钮与 chip。顶栏入口 chip = `--fp-surface-2` 药丸（高 28，圆角 pill），hover 用 `--fp-pressed`。
 - 顶栏响应式：<1120px 时同步/设置/节奏/汇总/时钟收进一个「⋯」入口（下拉菜单用 `.fp-ctxmenu` 样式 + `.fp-topmore__info` 信息行）；

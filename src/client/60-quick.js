@@ -234,11 +234,11 @@ function FpQuickCard(props) {
   children.push(
     h('div', { key: 'stats', className: 'fp-qpanel-stats' },
       h('button', { key: 'a', type: 'button', className: 'fp-qpanel-stat', onClick: function () { goView('today'); } },
-        h('b', { className: 'fp-qpanel-stat-num' }, String(actionable)), h('span', null, '可推进')),
+        h('b', { className: 'fp-qpanel-stat-num' }, String(actionable)), h('span', { className: 'fp-qpanel-stat-label' }, '可推进')),
       h('button', { key: 'f', type: 'button', className: 'fp-qpanel-stat', onClick: function () { goView('today'); } },
-        h('b', { className: 'fp-qpanel-stat-num' }, String(followTotal)), h('span', null, '待跟进')),
+        h('b', { className: 'fp-qpanel-stat-num' }, String(followTotal)), h('span', { className: 'fp-qpanel-stat-label' }, '待跟进')),
       h('button', { key: 'o', type: 'button', className: 'fp-qpanel-stat', 'data-tone': overdue > 0 ? 'error' : undefined, onClick: function () { goView('today'); } },
-        h('b', { className: 'fp-qpanel-stat-num' }, String(overdue)), h('span', null, '逾期'))
+        h('b', { className: 'fp-qpanel-stat-num' }, String(overdue)), h('span', { className: 'fp-qpanel-stat-label' }, '逾期'))
     )
   );
 
@@ -870,11 +870,13 @@ const CSS_QUICK = String.raw`
 .fp-qpanel-name {
   font-size: var(--fp-font-md);
   font-weight: 650;
+  line-height: 1.2;
   color: var(--fp-text);
 }
 .fp-qpanel-period {
   padding: 0 var(--fp-sp-1);
   height: 20px;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   border-radius: var(--fp-radius-pill);
@@ -909,7 +911,7 @@ const CSS_QUICK = String.raw`
 }
 .fp-qpanel-stat {
   display: flex;
-  align-items: baseline;
+  align-items: center;          /* 之前是 baseline：文字会顶在胶囊上沿，显不出居中 */
   justify-content: center;
   gap: var(--fp-sp-1);
   height: 40px;
@@ -928,8 +930,12 @@ const CSS_QUICK = String.raw`
 }
 .fp-qpanel-stat-num {
   font-size: var(--fp-font-md);
+  line-height: 1;               /* 数字与标签各自 line-height 不同会让整体重心偏上 */
   font-variant-numeric: tabular-nums;
   color: var(--fp-text);
+}
+.fp-qpanel-stat-label {
+  line-height: 1;
 }
 .fp-qpanel-stat[data-tone="error"] .fp-qpanel-stat-num {
   color: var(--fp-bad);
