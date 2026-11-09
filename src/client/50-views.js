@@ -296,7 +296,7 @@ function fpvLoading(icon, title) {
     h(FpEmptyState, {
       icon: icon || 'flow',
       title: title || '正在载入数据',
-      description: '等待宿主返回 FlowPilot 状态，稍后会自动出现。',
+      description: '等待宿主返回数据',
     }));
 }
 
@@ -528,7 +528,7 @@ function TodayView({ state, derived, onSelectNode, onOpenProject }) {
   const recommendedSection = h('div', { className: 'fp-v-section' },
     fpvSectionHead(
       fpvT('today.recommended', '推荐处理'),
-      recommended.length ? '按逾期 / 截止 / 进行中 / 待修改 / 待开始排序' : null,
+      null,
       'spark',
       recommended.length
     ),
@@ -542,13 +542,13 @@ function TodayView({ state, derived, onSelectNode, onOpenProject }) {
           showDue: true,
         });
       }))
-      : h('div', { className: 'fp-v-soft' }, '当前没有需要优先处理的节点。可以去流程里看看待开始的节点。')
+      : h('div', { className: 'fp-v-soft' }, '当前没有需要优先处理的节点')
   );
 
   const followSection = h('div', { className: 'fp-v-section' },
     fpvSectionHead(
       fpvT('today.followUps', '等待跟进'),
-      followUps.length ? '这些节点卡在确认或阻塞上，记得按跟进时间推进' : null,
+      null,
       'clock',
       followUps.length
     ),
@@ -569,7 +569,7 @@ function TodayView({ state, derived, onSelectNode, onOpenProject }) {
   const upcomingSection = h('div', { className: 'fp-v-section' },
     fpvSectionHead(
       fpvT('today.upcoming', '近期截止'),
-      upcoming.length ? '7 天内到期，提前留出交付缓冲' : null,
+      null,
       'calendar',
       upcoming.length
     ),
@@ -796,7 +796,7 @@ function WeeklyView({ state, derived }) {
     h(FpEmptyState, {
       icon: 'report',
       title: '本周还没有可生成周报的事件',
-      description: 'FlowPilot 只能整理已经记录的项目事件，不能据此推断你没有工作。可以先生成一份草稿，或在下方的编辑区手动补充。',
+      description: '只整理已记录的事件；可先生成草稿或手动补充。',
       actions: fpvBtn('gen', busyGenerate ? '生成中…' : fpvT('weekly.generate', '生成草稿'), onGenerateClick, {
         variant: 'primary',
         disabled: busyGenerate,
@@ -810,7 +810,7 @@ function WeeklyView({ state, derived }) {
         h('div', { className: 'fp-v-head-main' },
           h('div', { className: 'fp-v-eyebrow' }, 'WEEKLY REVIEW'),
           h('h2', { className: 'fp-v-title' }, rangeText + ' 周报'),
-          h('div', { className: 'fp-v-sub' }, '根据真实节点事件整理；编辑草稿不会改变项目进度。')
+          h('div', { className: 'fp-v-sub' }, '编辑草稿不会改动项目进度')
         ),
         h('div', { className: 'fp-v-head-actions' },
           h('div', { className: 'fp-v-seg' }, modeButtons),
@@ -823,7 +823,7 @@ function WeeklyView({ state, derived }) {
       h('div', { className: 'fp-v-note' },
         h(FpIcon, { name: 'report', size: 13 }),
         h('span', {},
-          '简洁模式只汇总完成、变更与等待中的事实；详细模式会附带事件明细与轮次。' +
+          '简洁：只列事实；详细：附事件明细与轮次。' +
           (settings.weeklyDraftTime ? ' 每周五 ' + settings.weeklyDraftTime + ' 自动生成草稿。' : '') +
           (settings.weeklyMeetingTime ? ' 周会 ' + settings.weeklyMeetingTime + '。' : ''))
       ),
@@ -964,7 +964,7 @@ function HandoffView({ state, derived, onOpenProject }) {
     h('div', { className: 'fp-v-head-main' },
       h('div', { className: 'fp-v-eyebrow' }, 'DAILY HANDOFF'),
       h('h2', { className: 'fp-v-title' }, fpvT('handoff.title', '日终交接')),
-      h('div', { className: 'fp-v-sub' }, '留住今天的上下文，明天从下一步继续。')
+      null
     ),
     h('div', { className: 'fp-v-chip-row fp-v-chip-row-end' },
       h(FpChip, { key: 'date', tone: 'muted', children: todayKey ? fpvTry(function () { return fpFmtDay(todayKey); }, todayKey) : '' }),
@@ -1020,7 +1020,7 @@ function HandoffView({ state, derived, onOpenProject }) {
         }) : null
       )
     );
-  }) : [h('div', { key: 'empty', className: 'fp-v-soft' }, '当前没有进行中、待修改或待开始的节点。')];
+  }) : [h('div', { key: 'empty', className: 'fp-v-soft' }, '当前没有可交接的节点')];
 
   const candidateCard = h('div', { className: 'fp-v-card' },
     h('div', { className: 'fp-v-card-head' },
@@ -1099,10 +1099,10 @@ function HandoffView({ state, derived, onOpenProject }) {
   });
 
   const historySection = h('div', { className: 'fp-v-section' },
-    fpvSectionHead('历史交接', '最近 7 条', 'clock', historyList.length),
+    fpvSectionHead('历史交接', null, 'clock', historyList.length),
     historyRows.length
       ? h('div', { className: 'fp-v-list' }, historyRows)
-      : h('div', { className: 'fp-v-soft' }, '还没有交接记录。完成一次日终交接后，这里会保留上下文。')
+      : h('div', { className: 'fp-v-soft' }, '还没有交接记录')
   );
 
   return h('div', { className: 'fp-v-root' },
@@ -1480,7 +1480,7 @@ function SettingsView({ state, derived, compact }) {
   return h('div', { className: 'fp-v-root' + (isCompact ? ' fp-v-compact' : '') },
     h('div', { className: 'fp-v-narrow fp-v-settings' },
       head,
-      fpvSettingsGroup('外观 · 主题色', '只换色相，饱和度与明度沿用主题令牌；仅保存在本机浏览器',
+      fpvSettingsGroup('外观 · 主题色', '只换色相，仅保存在本机',
         h('div', { className: 'fp-v-theme' },
           h('div', { className: 'fp-v-theme-row' },
             FP_ACCENT_PRESETS.map(function (preset) {
@@ -1516,9 +1516,9 @@ function SettingsView({ state, derived, compact }) {
           )
         )
       ),
-      fpvSettingsGroup('同步节奏', '客户端每隔 N 分钟与云端双向同步一次（最新覆盖旧的），每次同步都会上传',
+      fpvSettingsGroup('同步节奏', null,
         h('div', { className: 'fp-v-sync-interval' },
-          h(FpField, { label: '自动同步间隔（分钟）', hint: '范围 1~60；顶栏的同步按钮可随时手动触发' },
+          h(FpField, { label: '自动同步间隔（分钟）', hint: '1~60 分钟' },
             h('div', { className: 'fp-v-sync-interval-row' },
               h(FpInput, {
                 type: 'number',
@@ -1534,14 +1534,14 @@ function SettingsView({ state, derived, compact }) {
           )
         )
       ),
-      fpvSettingsGroup(fpvT('settings.workSlots', '工作时段'), '三个固定时段，用于节奏提示与静默判断', slotsChildren),
-      fpvSettingsGroup('静默窗', '静默期间不推送普通提醒', silentChildren),
-      fpvSettingsGroup(fpvT('settings.rhythm', '节奏与提醒'), '交接、周报草稿与周会的时间', rhythmChildren),
-      fpvSettingsGroup('完成与解锁', '双角色确认节点的完成证据条件，以及流程节点解锁方式', [
+      fpvSettingsGroup(fpvT('settings.workSlots', '工作时段'), null, slotsChildren),
+      fpvSettingsGroup('静默窗', null, silentChildren),
+      fpvSettingsGroup(fpvT('settings.rhythm', '节奏与提醒'), null, rhythmChildren),
+      fpvSettingsGroup('完成与解锁', null, [
         h(FpField, {
           key: 'evidenceKinds',
           label: '完成证据类型',
-          hint: '不选 = 任意类型；选中后只有这些类型的链接才算证据（可多选）',
+          hint: '不选 = 任意类型',
         },
           h('div', { className: 'fp-v-chiprow' },
             FP_EVIDENCE_KIND_LABELS && Object.keys(FP_EVIDENCE_KIND_LABELS).length > 0
@@ -1564,7 +1564,7 @@ function SettingsView({ state, derived, compact }) {
               : null
           )
         ),
-        h(FpField, { key: 'evidenceMin', label: '最少证据链接数', hint: '0 = 不需要证据（纯确认即可完成）' },
+        h(FpField, { key: 'evidenceMin', label: '最少证据链接数', hint: '0 = 不需要证据' },
           h(FpInput, {
             type: 'number',
             width: 96,
@@ -1572,7 +1572,7 @@ function SettingsView({ state, derived, compact }) {
             onChange: function (value) { updateDraft(function (next) { next.evidenceMin = value; }); },
           })
         ),
-        h(FpField, { key: 'unlockPolicy', label: '节点解锁方式', hint: 'parallel = 完成一个节点后同流程其余节点一起解锁（支持多轨并行）' },
+        h(FpField, { key: 'unlockPolicy', label: '节点解锁方式', hint: '并行：完成一个后其余一起解锁' },
           h(FpSelect, {
             value: draft.unlockPolicy,
             width: 220,
@@ -1584,8 +1584,8 @@ function SettingsView({ state, derived, compact }) {
           })
         ),
       ]),
-      fpvSettingsGroup('工作周', '周报统计与工作日计算', weekChildren),
-      fpvSettingsGroup(fpvT('settings.data', '数据与备份'), '本地数据文件与维护操作', dataChildren),
+      fpvSettingsGroup('工作周', null, weekChildren),
+      fpvSettingsGroup(fpvT('settings.data', '数据与备份'), null, dataChildren),
       h(FpSyncPanel, { key: 'sync-panel' }),
       h(FpUpdatePanel, { key: 'update-panel' }),
       error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null,
@@ -1632,7 +1632,7 @@ function ProjectOverview({ state, derived, project, onSelectNode, onCreateProjec
         h(FpEmptyState, {
           icon: 'flow',
           title: '还没有选中的项目',
-          description: '从左侧导航选择一个项目，或新建一个项目开始整理流程节点。',
+          description: '选择一个项目',
           actions: typeof onCreateProject === 'function'
             ? fpvBtn('create', '新建项目', onCreateProject, { variant: 'primary' })
             : null,
@@ -1755,7 +1755,7 @@ function ProjectOverview({ state, derived, project, onSelectNode, onCreateProjec
   });
 
   const eventsSection = h('div', { className: 'fp-v-section' },
-    fpvSectionHead('最近事件', '最近 5 条可追溯记录', 'clock', eventRows.length),
+    fpvSectionHead('最近事件', null, 'clock', eventRows.length),
     eventRows.length
       ? h('div', { className: 'fp-v-card fp-v-event-card' }, eventRows)
       : h('div', { className: 'fp-v-soft' }, '还没有事件记录。')
@@ -1763,7 +1763,7 @@ function ProjectOverview({ state, derived, project, onSelectNode, onCreateProjec
 
   const guideLines = [];
   if (currentNode) {
-    guideLines.push('点击当前节点卡片，在右侧详情中开始、完成或等待它；完成一个节点会自动解锁下一步。');
+    guideLines.push('完成一个节点会自动解锁下一步。');
   } else if (info.actionable > 0) {
     guideLines.push('当前有 ' + info.actionable + ' 个节点可推进，选择任意节点在右侧继续。');
   } else {
@@ -1883,7 +1883,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
   return h(FpDialog, {
     open: true,
     title: '新建项目',
-    description: '选择业务线与流程模板，稍后可在节点流里继续细化。',
+    description: null,
     width: 540,
     onClose: function () { if (!busy && typeof onClose === 'function') onClose(); },
     actions: fpvDialogActions(onClose, '创建项目', busy, submit, canSubmit),
@@ -1908,7 +1908,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
       onEnter: submit,
       onChange: function (event) { setTitle(fpvRead(event, '')); },
     })),
-  h(FpField, { label: '流程模板', hint: '可多选；设计交付与验收会生成两个流程实例。' },
+  h(FpField, { label: '流程模板', hint: '可多选' },
     h('div', { className: 'fp-v-choice-row' },
       Object.keys(FP_TEMPLATE_META).map(function (templateId) {
         const meta = FP_TEMPLATE_META[templateId] || {};
@@ -1922,7 +1922,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
           children: meta.short || meta.title || templateId,
         });
       }))),
-  h(FpField, { label: '交付日期', hint: '可留空；设定后会参与逾期与近期截止的计算。' },
+  h(FpField, { label: '交付日期', hint: '可留空' },
     fpvDateField('due', dueDate, setDueDate, { label: '交付日期' })),
   error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null,
   h('button', { type: 'submit', className: 'fp-v-submit-proxy', tabIndex: -1, 'aria-hidden': 'true' })
@@ -1978,7 +1978,7 @@ function LineEditDialog({ open, line, onClose }) {
   return h(FpDialog, {
     open: true,
     title: isEdit ? '重命名业务线' : '新建业务线',
-    description: isEdit ? '业务线用于按项目归属分组显示。' : '先建立业务线，再把项目挂到它下面。',
+    description: null,
     width: 420,
     onClose: function () { if (!busy && typeof onClose === 'function') onClose(); },
     actions: fpvDialogActions(onClose, isEdit ? '保存名称' : '创建业务线', busy, submit, !!name.trim()),
@@ -2079,7 +2079,7 @@ function LinkDialog({ open, node, onClose }) {
       options: FP_LINK_KINDS,
       onChange: function (event) { setKind(fpvRead(event, 'design')); },
     })),
-  h(FpField, { label: '标题', hint: '留空时使用域名作为标题。' },
+  h(FpField, { label: '标题', hint: '默认用域名' },
     h(FpInput, {
       value: title,
       placeholder: '例如：设计稿交互框架',
@@ -2164,7 +2164,7 @@ function ScheduleDialog({ open, node, onClose }) {
     className: 'fp-v-form',
     onSubmit: function (event) { event.preventDefault(); submit(); },
   },
-  h(FpField, { label: '计划时间', hint: '交付或计划完成的时间；留空表示不设定。' },
+  h(FpField, { label: '计划时间', hint: '留空不设定' },
     fpvDateTimeRow({
       key: 'due',
       label: '计划',
@@ -2175,7 +2175,7 @@ function ScheduleDialog({ open, node, onClose }) {
       onClear: function () { setDueDate(''); setDueTime(''); },
       disabled: busy,
     })),
-  h(FpField, { label: '跟进时间', hint: '用于「等待跟进」列表的提醒时间；留空表示不提醒。' },
+  h(FpField, { label: '跟进时间', hint: '留空不提醒' },
     fpvDateTimeRow({
       key: 'follow',
       label: '跟进',
@@ -2201,7 +2201,7 @@ function ReasonDialog({ open, mode, node, onClose }) {
     ? {
       title: '退回修改',
       reasonLabel: '退回原因',
-      hint: '退回后节点进入「待修改」，轮次 +1；请说明需要改什么。',
+      hint: '轮次 +1，请说明需要改什么',
       placeholder: '例如：交互稿缺少空状态说明，需要补充后重新确认。',
       submitLabel: '确认退回',
       toast: '已退回，进入待修改',
@@ -2211,7 +2211,7 @@ function ReasonDialog({ open, mode, node, onClose }) {
       ? {
         title: '跳过节点',
         reasonLabel: '跳过原因',
-        hint: '跳过的节点不计入完成成果，但会保留在事件记录里。',
+        hint: '不计入完成成果',
         placeholder: '例如：本次范围不含该节点，经确认跳过。',
         submitLabel: '确认跳过',
         toast: '节点已跳过',
@@ -2220,7 +2220,7 @@ function ReasonDialog({ open, mode, node, onClose }) {
       : {
         title: '标记阻塞',
         reasonLabel: '阻塞原因',
-        hint: '请说明卡在哪里、在等谁；可以同时设定跟进时间。',
+        hint: '说明卡在哪、在等谁',
         placeholder: '例如：等待产品确认交互稿，周三前给反馈。',
         submitLabel: '标记阻塞',
         toast: '已标记为阻塞',
@@ -2311,7 +2311,7 @@ function ReasonDialog({ open, mode, node, onClose }) {
         }
       },
     })),
-  currentMode === 'block' ? h(FpField, { label: '跟进时间', hint: '可选；到点后节点会出现在「等待跟进」里。' },
+  currentMode === 'block' ? h(FpField, { label: '跟进时间', hint: '可选' },
     fpvDateTimeRow({
       key: 'follow',
       label: '跟进',

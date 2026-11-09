@@ -145,17 +145,21 @@ function fpFlowValidUrl(value) {
 }
 
 /** 计划/跟进时间的展示信息（逾期/临近用颜色区分）。 */
-function fpFlowDueInfo(value, now) {
+function fpFlowDueInfo(value, now, settled) {
   const date = fpParseDate(value);
   if (!date) return null;
   const days = fpDaysLeft(value, now);
+  // 已结束（完成/跳过）的节点只展示日期本身：不再提示逾期/今天/明天，也不再用错误色
+  if (settled === true) {
+    return { text: fpFmtDay(value, now), days: days, overdue: false, soon: false, settled: true, full: fpFmtDateTime(value, now) };
+  }
   const overdue = typeof days === 'number' && days < 0;
   const soon = typeof days === 'number' && !overdue && days <= 1;
   let text = fpFmtDay(value, now);
   if (overdue) text = text + ' · 逾期 ' + Math.abs(days) + ' 天';
   else if (days === 0) text = text + ' · 今天';
   else if (days === 1) text = text + ' · 明天';
-  return { text: text, days: days, overdue: overdue, soon: soon, full: fpFmtDateTime(value, now) };
+  return { text: text, days: days, overdue: overdue, soon: soon, settled: false, full: fpFmtDateTime(value, now) };
 }
 
 function fpFlowEventTime(value, now) {
@@ -305,8 +309,9 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
   const meta = FP_STATUS[status] || FP_STATUS.locked;
   const linkList = Array.isArray(links) ? links : [];
   const linkCount = linkList.length;
-  const due = fpFlowDueInfo(node.dueAt, now);
-  const follow = node.followUpAt ? fpFlowDueInfo(node.followUpAt, now) : null;
+  const settled = status === 'completed' || status === 'skipped';
+  const due = fpFlowDueInfo(node.dueAt, now, settled);
+  const follow = node.followUpAt ? fpFlowDueInfo(node.followUpAt, now, settled) : null;
   const approval = fpIsApprovalNode(node) ? node.approvals || {} : null;
   const returns = Array.isArray(returnCodes) ? returnCodes.filter(Boolean) : [];
   const className = fpFlowClass(
@@ -374,7 +379,7 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
               title: '计划完成：' + due.full,
             },
             h(FpIcon, { name: 'calendar', size: 11 }),
-            '计划 ' + due.text,
+            due.text,
           )
         : null,
       follow
@@ -382,7 +387,7 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
             'span',
             { className: fpFlowClass('fp-node-meta-item', 'fp-is-follow'), title: '跟进时间：' + follow.full },
             h(FpIcon, { name: 'clock', size: 11 }),
-            '跟进 ' + follow.text,
+            follow.text,
           )
         : null,
       node.plannedAt
@@ -390,7 +395,7 @@ function FlowNodeCard({ node, links, selected, now, onClick, current, returnCode
             'span',
             { className: 'fp-node-meta-item fp-node-planned', title: '计划开始：' + String(node.plannedAt) },
             h(FpIcon, { name: 'flag', size: 11 }),
-            '计划 ' + fpFmtDay(node.plannedAt, now),
+            fpFmtDay(node.plannedAt, now),
           )
         : null,
       h(
@@ -582,7 +587,7 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
         { className: 'fp-flow-empty' },
         h('div', { className: 'fp-flow-empty-icon' }, h(FpIcon, { name: 'flow', size: 24 })),
         h('div', { className: 'fp-flow-empty-title' }, '选择一个项目开始'),
-        h('div', { className: 'fp-flow-empty-desc' }, '左侧业务线下的每个项目都会展开成纵向节点流。也可以先创建项目，模板会自动生成整套节点。'),
+        h('div', { className: 'fp-flow-empty-desc' }, '先新建项目，模板会展开节点。'),
         h(
           'div',
           { className: 'fp-flow-empty-actions' },
@@ -642,7 +647,7 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
           'div',
           { className: 'fp-flow-item', key: 'empty-' + flow.id },
           h('div', { className: 'fp-flow-rail' }, h('span', { className: 'fp-flow-marker fp-flow-marker--locked' }, h(FpIcon, { name: 'dot', size: 11 }))),
-          h('div', { className: 'fp-flow-placeholder' }, '这个流程还没有节点：创建项目时由模板自动生成。'),
+          h('div', { className: 'fp-flow-placeholder' }, '这个流程还没有节点'),
         ),
       );
     }
@@ -757,7 +762,6 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
           'div',
           { className: 'fp-flow-placeholder fp-flow-placeholder--lg' },
           h('div', { className: 'fp-flow-placeholder-title' }, '项目还没有流程'),
-          h('div', { className: 'fp-flow-placeholder-desc' }, '用「设计交付」或「验收」模板创建流程后，节点会按顺序展开。'),
           archived
             ? null
             : h(FpButton, { size: 'sm', variant: 'primary', icon: 'plus', onClick: requestAddFlow }, '添加验收流程'),
@@ -946,7 +950,6 @@ function NodeDetail({ state, derived, project, node, onClose }) {
   const flowName = flow ? flow.name : '';
   const projectTitle = project ? project.title : fpProjectById(safeState, node.projectId) ? fpProjectById(safeState, node.projectId).title : '项目';
   const events = fpEventsFor(safeState, { nodeId: node.id, limit: 20 });
-  const designCount = links.filter((link) => link && link.kind === 'design').length;
   const canAct = !archived && !locked && !finished && !busy;
   const completeDisabled = !canAct || !gate.ok;
 
@@ -1172,7 +1175,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     const gateTone = gate.ok ? 'fp-is-ok' : 'fp-is-warn';
     return fpFlowSection(
       '双角色确认',
-      { hint: '双方通过 + ' + fpEvidenceText(evidencePolicy), className: 'fp-detail-sec--approval' },
+      { className: 'fp-detail-sec--approval' },
       h(
         'div',
         { className: 'fp-detail-gate ' + gateTone },
@@ -1275,19 +1278,6 @@ function NodeDetail({ state, derived, project, node, onClose }) {
           );
         }),
       ),
-      h(
-        'div',
-        { className: fpFlowClass('fp-detail-design', designCount > 0 ? 'fp-is-ok' : 'fp-is-warn') },
-        h(FpIcon, { name: 'link', size: 12 }),
-        h('span', { className: 'fp-detail-design-text' }, designCount > 0 ? '已关联 ' + designCount + ' 条 设计稿链接' : '缺少 设计稿链接，暂不能完成'),
-        h('span', { className: 'fp-spacer' }),
-        h(
-          FpButton,
-          { size: 'sm', variant: 'ghost', disabled: archived || !!busy, onClick: () => openLinkForm('design') },
-          designCount > 0 ? '补充' : '添加链接',
-        ),
-      ),
-      h('p', { className: 'fp-detail-hint' }, '需设计与产品双方确认，并添加 设计稿链接后才能完成；条件满足时宿主会自动完成节点。'),
     );
   }
 
@@ -1296,8 +1286,8 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     if (locked) {
       return fpFlowSection(
         '推进节点',
-        { hint: meta.label },
-        h('p', { className: 'fp-detail-hint' }, '前置节点完成后会自动解锁，当前只能预览与补全链接/笔记。'),
+        {},
+        h('p', { className: 'fp-detail-hint' }, '前置节点完成后自动解锁。'),
       );
     }
 
@@ -1472,7 +1462,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
               )
             : null,
           actionMode === 'skip'
-            ? h('p', { className: 'fp-detail-hint' }, '跳过不计入完成成果，但会保留在事件时间线里。')
+            ? h('p', { className: 'fp-detail-hint' }, '不计入完成成果。')
             : null,
           h(
             'div',
@@ -1507,12 +1497,13 @@ function NodeDetail({ state, derived, project, node, onClose }) {
       );
     }
 
-    return fpFlowSection('推进节点', { hint: meta.label }, ...children);
+    return fpFlowSection('推进节点', {}, ...children);
   }
 
   function renderScheduleSection() {
-    const dueInfo = node.dueAt ? fpFlowDueInfo(node.dueAt, now) : null;
-    const followInfo = node.followUpAt ? fpFlowDueInfo(node.followUpAt, now) : null;
+    const settledSchedule = node.status === 'completed' || node.status === 'skipped';
+    const dueInfo = node.dueAt ? fpFlowDueInfo(node.dueAt, now, settledSchedule) : null;
+    const followInfo = node.followUpAt ? fpFlowDueInfo(node.followUpAt, now, settledSchedule) : null;
     const children = [];
     if (scheduleEditing) {
       children.push(
@@ -1560,7 +1551,6 @@ function NodeDetail({ state, derived, project, node, onClose }) {
               busy === 'setNodeSchedule' ? '保存中…' : '保存时间',
             ),
           ),
-          h('p', { className: 'fp-detail-hint' }, '留空表示不设置；逾期会在节点卡上用错误色提示。'),
         ),
       );
     } else {
@@ -1568,14 +1558,14 @@ function NodeDetail({ state, derived, project, node, onClose }) {
         h(
           'div',
           { className: 'fp-detail-kv-list' },
-          fpFlowKv('计划开始', node.plannedAt ? fpFmtDay(node.plannedAt, now) : '未设置', {
+          fpFlowKv('计划开始', node.plannedAt ? fpFmtDay(node.plannedAt, now) : '—', {
             title: node.plannedAt ? String(node.plannedAt) : undefined,
           }),
-          fpFlowKv('计划完成', dueInfo ? dueInfo.text : '未设置', {
+          fpFlowKv('计划完成', dueInfo ? dueInfo.text : '—', {
             tone: dueInfo && dueInfo.overdue ? 'fp-is-overdue' : dueInfo && dueInfo.soon ? 'fp-is-soon' : null,
             title: dueInfo ? dueInfo.full : undefined,
           }),
-          fpFlowKv('下次跟进', followInfo ? followInfo.full : '未设置', {
+          fpFlowKv('下次跟进', followInfo ? followInfo.full : '—', {
             tone: followInfo && followInfo.overdue ? 'fp-is-overdue' : null,
           }),
         ),
@@ -1617,7 +1607,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
   function renderLinksSection() {
     const children = [];
     if (links.length === 0 && !linkForm) {
-      children.push(h('p', { className: 'fp-detail-hint' }, '还没有链接。设计稿 交互稿、Figma 文件、需求文档都可以挂在这里。'));
+      children.push(h('p', { className: 'fp-detail-hint' }, '还没有链接'));
     }
     if (links.length > 0) {
       children.push(
@@ -1707,7 +1697,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     if (notesState === 'saved') return '已保存';
     if (notesState === 'error') return '保存失败';
     if (notesState === 'dirty') return '未保存';
-    return '失焦自动保存';
+    return '';
   }
 
   function renderNotesSection() {
@@ -1723,7 +1713,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             h(FpTextarea, {
               value: notesDraft,
               rows: 4,
-              placeholder: '记录判断、反馈要点、下次继续的入口…',
+              placeholder: '记录判断与下一步…',
               onChange: (value) => {
                 setNotesDraft(value);
                 setNotesState(value !== savedNotesRef.current ? 'dirty' : 'idle');
@@ -1766,7 +1756,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     );
     return fpFlowSection(
       '事件时间线',
-      { hint: events.length > 0 ? '最近 ' + events.length + ' 条' : null },
+      {},
       events.length === 0
         ? h('p', { className: 'fp-detail-hint' }, '这个节点还没有事件记录。')
         : h('ol', { className: 'fp-detail-timeline' }, ...items),
@@ -1812,7 +1802,6 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             )
           : null,
       ),
-      meta.hint ? h('p', { className: 'fp-detail-hint' }, meta.hint) : null,
       node.detail ? h('p', { className: 'fp-detail-desc' }, node.detail) : null,
     ),
     h(
@@ -2558,7 +2547,8 @@ const CSS_FLOW = String.raw`
 .fp-detail-scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--fp-sp-2);
@@ -2580,6 +2570,9 @@ const CSS_FLOW = String.raw`
   min-width: 0;
 }
 .fp-detail-sec-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--fp-font-sm);
   font-weight: 650;
   color: var(--fp-text);
@@ -2587,6 +2580,10 @@ const CSS_FLOW = String.raw`
 }
 .fp-detail-sec-hint {
   margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 10px;
   color: var(--fp-text-tertiary);
   white-space: nowrap;
@@ -2675,23 +2672,6 @@ const CSS_FLOW = String.raw`
   border-radius: var(--fp-radius-md);
   background: var(--fp-surface);
 }
-.fp-detail-design {
-  display: flex;
-  align-items: center;
-  gap: var(--fp-sp-2);
-  padding: var(--fp-sp-2) var(--fp-sp-3);
-  border-radius: var(--fp-radius-md);
-  font-size: var(--fp-font-xs);
-}
-.fp-detail-design.fp-is-ok {
-  color: var(--fp-ok);
-  background: color-mix(in srgb, var(--fp-ok) 12%, transparent);
-}
-.fp-detail-design.fp-is-warn {
-  color: var(--fp-warn-strong);
-  background: color-mix(in srgb, var(--fp-warn) 14%, transparent);
-}
-.fp-detail-design-text { min-width: 0; overflow-wrap: anywhere; }
 .fp-detail-form { display: flex; flex-direction: column; gap: var(--fp-sp-2); }
 .fp-detail-form--inline {
   padding: var(--fp-sp-3);
@@ -2911,18 +2891,24 @@ const CSS_FLOW = String.raw`
 }
 
 /* ---- 审批日志 / 退回原因 / 事件操作者 ---- */
-.fp-detail-log{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.fp-detail-log{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;min-width:0;}
 .fp-detail-log-row{
-  display:flex;align-items:center;gap:8px;min-width:0;
+  display:flex;align-items:flex-start;gap:8px;min-width:0;
   padding:var(--fp-sp-1) var(--fp-sp-2);border-radius:var(--fp-radius-sm);
-  background:var(--fp-surface-2);font-size:var(--fp-font-xs);
+  background:var(--fp-surface-2);font-size:var(--fp-font-xs);line-height:1.5;
 }
 .fp-detail-log-row--warn{
   background:color-mix(in srgb,var(--fp-bad) 10%,transparent);
 }
 .fp-detail-log-role{flex:none;font-weight:600;color:var(--fp-text-dim);}
-.fp-detail-log-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fp-text);}
-.fp-detail-log-meta{margin-left:auto;flex:none;font-size:10px;color:var(--fp-text-tertiary);}
+/* 「通过 / 未通过」是短词：不压缩，长内容交给右侧 meta 换行 */
+.fp-detail-log-text{flex:0 0 auto;white-space:nowrap;color:var(--fp-text);}
+/* 评论/原因可能很长（用户会写整段说明）：允许换行并断词，绝不横向撑出面板 */
+.fp-detail-log-meta{
+  margin-left:auto;flex:1 1 auto;min-width:0;
+  text-align:right;white-space:normal;overflow-wrap:anywhere;word-break:break-word;
+  font-size:10px;line-height:1.5;color:var(--fp-text-tertiary);
+}
 .fp-detail-event-actor{
   padding:0 4px;height:16px;display:inline-flex;align-items:center;
   border-radius:var(--fp-radius-sm);

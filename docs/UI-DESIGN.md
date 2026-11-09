@@ -16,6 +16,17 @@
 
 ---
 
+## 1.1 文案原则
+
+> **Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.**
+
+- **能用布局/图标/状态 chip 表达的，不写第二个标签。** 节点卡上的「计划 / 跟进 / 计划开始」前缀已删除：日历 = 计划完成、时钟 = 跟进、旗帜 = 计划开始，完整语义保留在 `title`（悬停）里。
+- **同一信息只写一次。** 状态 chip 已经表达状态，就不再附一段状态说明；完成门槛在 gate 里说明后，不再重复一行「需双方确认 + 设计稿链接」。
+- **小节说明只在规则不直观时保留一条**（证据门槛、归档只读、跳过不计入成果）；能由按钮/表单 label 说明的 hint 一律删。
+- **空态只回答「这里是什么」**，操作交给旁边的按钮：`还没有链接`、`还没有业务线`、`选择一个项目`。
+- **表单 hint 只写约束/默认值**，不写「留空表示不设置」这类复述；**超过 30 个汉字的 hint 视为过度解释**。
+- **校验**：`tools/audit-ui.mjs` 的 `auditCopy()` 拦截黑名单复述文案与超长 hint（`--strict` 下计入未达标）。
+
 ## 2. 颜色层级（设计系统 色表 → 令牌）
 
 | 用途 | 令牌 | 浅色（增长/常规） | 深色（增长/深色） |
@@ -130,7 +141,7 @@
 ```bash
 node tools/audit-ui.mjs             # 表格：描边/预算、非 4 栅格间距、非法颜色、--dsw-alias 残留
 node tools/audit-ui.mjs --detail    # 附带明细
-node tools/audit-ui.mjs --strict    # 未达标退出码 1
+node tools/audit-ui.mjs --strict    # 未达标退出码 1（含文案原则：复述型文案 / 超长 hint）
 node build-client.mjs && node --check client.js && node tests/client-smoke.mjs
 ```
 

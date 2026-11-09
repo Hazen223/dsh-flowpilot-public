@@ -1069,7 +1069,7 @@ function AiPrdDialog(props) {
           key: 'prd',
           label: 'PRD 文本',
           required: true,
-          hint: '至少 ' + FP_AI_MIN_CHARS + ' 字；可粘贴或拖入 .md / .txt 文件（仅前端读取，不上传）。',
+          hint: '至少 ' + FP_AI_MIN_CHARS + ' 字；可拖入 .md / .txt（仅本地读取）',
         },
         h(
           'div',
@@ -1108,7 +1108,7 @@ function AiPrdDialog(props) {
       h(
         'div',
         { key: 'fields', className: 'fp-ai-grid' },
-        h(FpField, { key: 'line', label: '业务线（可选）', hint: '可选择已有业务线，或直接填写新名字。' }, renderLinePicker()),
+        h(FpField, { key: 'line', label: '业务线（可选）' }, renderLinePicker()),
         h(
           FpField,
           { key: 'extra', label: '补充要求（可选）', hint: '例如：节点不超过 8 个、侧重投放流程。' },
@@ -1306,10 +1306,10 @@ function AiPrdDialog(props) {
           { key: 'title', label: '项目标题', required: true },
           h(FpInput, { value: pTitle, placeholder: '例如：活动管理改版', ariaLabel: '项目标题', onChange: handleTitleChange }),
         ),
-        h(FpField, { key: 'line', label: '业务线', required: true, hint: '可选择已有业务线，或新建一个名字。' }, renderLinePicker()),
+        h(FpField, { key: 'line', label: '业务线', required: true }, renderLinePicker()),
         h(
           FpField,
-          { key: 'due', label: '截止日期', hint: '可留空；生成后仍可在项目里修改。' },
+          { key: 'due', label: '截止日期', hint: '可留空' },
           h(
             'div',
             { className: 'fp-ai-line-row' },

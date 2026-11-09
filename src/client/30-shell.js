@@ -2664,7 +2664,7 @@ function FpRoot() {
         'div',
         { className: 'fp-nav__scroll fp-scroll' },
         linesSorted.length === 0
-          ? h('p', { className: 'fp-nav__empty' }, '还没有业务线。先新建一条，再在它下面添加项目。')
+          ? h('p', { className: 'fp-nav__empty' }, '还没有业务线')
           : linesSorted.map(renderLine),
         archivedProjects.length > 0 ? renderArchived() : null,
       ),
@@ -2711,7 +2711,7 @@ function FpRoot() {
       icon: h(FpSidebarGlyph, { size: 24, active: true }),
       title: '开始搭建你的项目流程',
       description:
-        '先建一条业务线（例如「增长推广」），再在业务线下新建项目并选择「设计交付 / 验收」模板；FlowPilot 会按模板自动展开整套流程节点。',
+        '先建业务线，再新建项目；模板会自动展开节点。',
       actions: [
         h(FpButton, { key: 'create-line', variant: 'primary', icon: 'plus', onClick: openCreateLine }, '新建业务线'),
         h(
@@ -2720,7 +2720,7 @@ function FpRoot() {
           seedBusy ? '载入中…' : '载入示例数据',
         ),
       ],
-      hint: '示例数据包含 2 条业务线、4 个在建项目与完整节点、事件与周报；数据保存在本机，可随时在设置里清空。',
+      hint: '示例数据保存在本机，可随时清空。',
     });
   }
 
@@ -2728,7 +2728,7 @@ function FpRoot() {
     return fpShellGuideCard({
       icon: h(FpIcon, { name: 'flow', size: 22 }),
       title: '选择一个项目开始',
-      description: '左侧业务线下的每个项目都会展开成纵向节点流；也可以先新建一个项目，模板会自动生成全部节点。',
+      description: null,
       actions: [
         h(
           FpButton,
@@ -2792,7 +2792,7 @@ function FpRoot() {
         'p',
         { className: 'fp-side__empty-desc' },
         selectedProject !== null
-          ? '在中间的节点流里点击任意节点，这里会显示操作、计划、链接与事件。'
+          ? '点击节点查看详情'
           : '先从左侧选择一个项目。',
       ),
       selectedProject !== null

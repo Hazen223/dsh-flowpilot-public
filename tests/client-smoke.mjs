@@ -262,6 +262,24 @@ function collectTexts(node, out, depth) {
   collectTexts(props.children, out, depth + 1)
 }
 
+function collectClassNames(node, out, depth) {
+  if (depth > 80 || node === null || node === undefined) return
+  if (typeof node !== 'object' || Array.isArray(node)) {
+    if (Array.isArray(node)) node.forEach((child) => collectClassNames(child, out, depth + 1))
+    return
+  }
+  const type = node.type
+  const props = node.props || {}
+  if (typeof props.className === 'string') out.push(props.className)
+  if (typeof type === 'function') {
+    let produced = null
+    try { produced = type(props) } catch (error) { return }
+    collectClassNames(produced, out, depth + 1)
+    return
+  }
+  collectClassNames(props.children, out, depth + 1)
+}
+
 const fakeEvent = () => ({
   preventDefault() {}, stopPropagation() {}, persist() {},
   key: 'Enter', code: 'Enter', which: 13,
@@ -534,7 +552,60 @@ async function main() {
     notes.push('主面板可见文本 ' + texts.length + ' 段，前 12 段：' + texts.slice(0, 12).join(' / '))
   }
 
-  /* 6) 未知事件 kind 不得让时间线崩溃（宿主会做近似映射，未来可能新增） */
+  /* 6) 完成/跳过节点不再显示逾期（只保留计划日期） */
+  if (fixture) {
+    const components6 = mod.__test.components
+    const now6 = new Date()
+    const pastDue = new Date(now6.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    const flowId = fixture.state.flows && fixture.state.flows[0] ? fixture.state.flows[0].id : null
+    const baseNode = {
+      id: 'nd_overdue_check', code: 'X01', title: '需求接收与目标对齐', status: 'completed',
+      assigneeRole: '设计', dueAt: pastDue, followUpAt: null, plannedAt: null, round: 1,
+      approvals: {}, approvalRoles: [], flowId: flowId, projectId: fixture.state.projects[0].id, sortOrder: 0, notes: '',
+    }
+    const renderCard = (node) => {
+      const element = React.createElement(components6.FlowNodeCard, {
+        node: node, links: [], selected: false, now: now6, onClick: () => {}, current: false, returnCodes: [], reworkTarget: null,
+      })
+      const texts = []
+      const classes = []
+      collectTexts(element, texts, 0)
+      collectClassNames(element, classes, 0)
+      return { text: texts.join(' '), classes: classes }
+    }
+    const doneCard = renderCard(baseNode)
+    if (doneCard.text.indexOf('逾期') !== -1) fail('已完成节点仍然显示逾期：' + doneCard.text.slice(0, 140))
+    if (doneCard.classes.some((name) => name.indexOf('fp-is-overdue') !== -1)) fail('已完成节点仍使用逾期错误色')
+    if (!/\d+月\d+日/.test(doneCard.text)) fail('已完成节点应保留计划日期（当前：' + doneCard.text.slice(0, 80) + '）')
+    const skippedCard = renderCard(Object.assign({}, baseNode, { status: 'skipped' }))
+    if (skippedCard.text.indexOf('逾期') !== -1) fail('已跳过节点仍然显示逾期：' + skippedCard.text.slice(0, 140))
+    const liveCard = renderCard(Object.assign({}, baseNode, { status: 'active' }))
+    if (liveCard.text.indexOf('逾期') === -1) fail('未完成节点的逾期提示不应被误删')
+    if (!liveCard.classes.some((name) => name.indexOf('fp-is-overdue') !== -1)) fail('未完成节点的逾期错误色不应被误删')
+    // 详情「计划与跟进」同样不应给已完成节点标逾期
+    const detailState = JSON.parse(JSON.stringify(fixture.state))
+    const doneNode = (detailState.nodes || []).find((node) => node.status === 'completed')
+    if (doneNode) {
+      doneNode.dueAt = pastDue
+      const detailTexts = []
+      collectTexts(React.createElement(components6.NodeDetail, {
+        state: detailState,
+        derived: fixture.derived,
+        project: (detailState.projects || []).find((item) => item.id === doneNode.projectId),
+        node: doneNode,
+        onClose: () => {},
+      }), detailTexts, 0)
+      const detailJoined = detailTexts.join(' ')
+      if (detailJoined.indexOf('计划完成') === -1) {
+        notes.push('提示：节点详情的计划区未渲染，跳过「详情不显示逾期」断言')
+      } else if (detailJoined.indexOf('逾期') !== -1) {
+        fail('已完成节点详情仍显示逾期：' + detailJoined.slice(0, 160))
+      }
+    }
+    notes.push('完成/跳过节点逾期显示回归：通过')
+  }
+
+  /* 7) 未知事件 kind 不得让时间线崩溃（宿主会做近似映射，未来可能新增） */
   if (fixture) {
     const unknownState = JSON.parse(JSON.stringify(fixture.state))
     const target = (unknownState.nodes || []).find((node) => node.status === 'active') || (unknownState.nodes || [])[0]

@@ -181,6 +181,40 @@ function auditButtonBorders() {
 
 const buttonBorders = auditButtonBorders()
 
+/* ---- 跨文件检查：文案原则（避免次要标签/解释，让布局说话） ----
+ *  - 禁用「可由布局直接看出」的复述型文案（黑名单）
+ *  - 单条 hint 超过 30 个汉字视为过度解释
+ */
+const BANNED_COPY = [
+  '失焦自动保存',
+  '留空表示不设置',
+  '按逾期 / 截止 / 进行中 / 待修改 / 待开始排序',
+  '这些节点卡在确认或阻塞上',
+  '最近 5 条可追溯记录',
+  '左侧业务线下的每个项目都会展开成纵向节点流',
+  '需设计与产品双方确认，并添加 设计稿链接后才能完成',
+  '表示不设置',
+  '表示不提醒',
+]
+
+function auditCopy() {
+  const files = readdirSync(SRC).filter((name) => name.endsWith('.js'))
+  const problems = []
+  for (const name of files) {
+    const text = readFileSync(join(SRC, name), 'utf8')
+    for (const banned of BANNED_COPY) {
+      if (text.includes(banned)) problems.push(`${name}: 复述型文案「${banned}」`)
+    }
+    for (const m of text.matchAll(/hint:\s*'([^']*)'/g)) {
+      const han = (m[1].match(/[\u4e00-\u9fff]/g) || []).length
+      if (han > 30) problems.push(`${name}: hint 过长（${han} 字）「${m[1].slice(0, 40)}…」`)
+    }
+  }
+  return problems
+}
+
+const copyProblems = auditCopy()
+
 const violations = []
 for (const row of rows) {
   if (row.borders > row.budget) violations.push(`${row.file}: 描边 ${row.borders} 超过预算 ${row.budget}`)
@@ -192,11 +226,12 @@ if (totals.borders > TOTAL_BORDER_BUDGET) violations.push(`全量描边 ${totals
 if (buttonBorders.length > 0) {
   violations.push(`按钮类没有显式 border:0（会显示原生双圈边框）：${buttonBorders.join('、')}`)
 }
+for (const problem of copyProblems) violations.push('文案原则：' + problem)
 
 
 
 if (jsonMode) {
-  console.log(JSON.stringify({ rows, totals, violations, buttonBorders }, null, 2))
+  console.log(JSON.stringify({ rows, totals, violations, buttonBorders, copyProblems }, null, 2))
 } else {
   console.log('file                 borders/budget   offGrid4   badHex   dswTokens')
   console.log('-'.repeat(72))
