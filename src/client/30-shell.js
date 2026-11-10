@@ -368,7 +368,7 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
 }
 .fp-nav__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 /* 左栏底部两个按钮：尺寸/字重统一，图标固定在左侧、文字真正居中 */
@@ -669,6 +669,16 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   cursor: pointer;
   transition: background-color 140ms ease, color 140ms ease;
 }
+.fp-archived__empty {
+  padding: 0 var(--fp-sp-3) var(--fp-sp-2);
+  font-size: var(--fp-font-xs);
+  color: var(--fp-text-tertiary);
+}
+.fp-ctxmenu__item:disabled {
+  opacity: 0.45;
+  cursor: default;
+  background: transparent;
+}
 .fp-archived__toggle:hover {
   background: var(--fp-hover);
   color: var(--fp-text-dim);
@@ -706,12 +716,13 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   overflow: hidden;
   background: var(--fp-surface);
   border-radius: var(--fp-radius-lg);
-  /* 收起/展开：宽度走 expo-out 缓动（非线性），内容再做一次轻微位移淡入 */
+  /* 收起/展开：只做宽度缓动。
+     闪烁的真正来源是「内容淡入/位移动画叠加 + will-change: flex-basis」，已一并移除；
+     这里保留纯宽度过渡，中栏随宽度平滑重排，不再有一次换一套动画的闪烁。 */
   transition:
-    flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1),
-    width 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    flex-basis 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 200ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 200ms ease;
-  will-change: flex-basis, width;
 }
 .fp-side__panel {
   display: flex;
@@ -719,7 +730,6 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  animation: fp-side-panel-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .fp-side__rail-inner {
   display: flex;
@@ -729,19 +739,9 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   width: 100%;
   height: 100%;
   padding: var(--fp-sp-2) 0;
-  animation: fp-side-rail-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes fp-side-panel-in {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes fp-side-rail-in {
-  from { opacity: 0; transform: translateX(8px); }
-  to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fp-side { transition: none; }
-  .fp-side__panel, .fp-side__rail-inner { animation: none; }
 }
 .fp-side--overlay {
   position: absolute;
@@ -1152,7 +1152,9 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 0 var(--fp-sp-3) var(--fp-sp-4) var(--fp-sp-3);
+  /* 设置页：body 用下沉面，里面的功能卡（surface）才浮得起来 */
+  background: var(--fp-surface-2);
+  padding: var(--fp-sp-3);
 }
 @keyframes fp-modal-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -1230,8 +1232,24 @@ const CSS_SHELL = String.raw`/* ===== 分层：--fp-base 打底；左栏平铺�
  * 外壳内部常量 / 小工具（仅本文件使用）
  * ------------------------------------------------------------------ */
 
-const FP_SHELL_VIEW_IDS = ['flow', 'today', 'weekly', 'handoff'];
+const FP_SHELL_VIEW_IDS = ['flow', 'today', 'handoff', 'weekly'];
 const FP_SHELL_PREFS_KEY = 'flowpilot.shell.prefs.v1';
+/* 快速面板（顶栏 chip / 快捷浮层）与主面板不在同一组件树：用自定义事件通知已挂载的 Shell 切视图。
+   只写 localStorage 是不够的——Shell 的 view 只在挂载时读一次。 */
+const FP_SET_VIEW_EVENT = 'flowpilot:set-view';
+
+function fpRequestView(view) {
+  if (typeof view !== 'string' || view === '') return false;
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent(FP_SET_VIEW_EVENT, { detail: { view: view } }));
+      return true;
+    }
+  } catch (error) {
+    /* 事件不可用时静默（仍会写预，下次启动生效） */
+  }
+  return false;
+}
 const FP_SHELL_DIALOG_EMPTY = { kind: null, line: null, node: null, flow: null, mode: null, lineId: null };
 const FP_SHELL_WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -1411,6 +1429,23 @@ function FpRoot() {
 
   const prefsRef = useRef(null);
   if (prefsRef.current === null) prefsRef.current = fpShellReadPrefs() || {};
+
+  // 快速面板点「今日 / 周报 / 交接」时切到对应视图（同一个页面事件）
+  useEffect(function () {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return undefined;
+    const onSetView = function (event) {
+      const detail = event && event.detail ? event.detail : null;
+      const next = detail !== null && typeof detail.view === 'string' ? detail.view : '';
+      if (next === '' || FP_SHELL_VIEW_IDS.indexOf(next) === -1) return;
+      setView(next);
+      setSettingsOpen(false);
+      setNavOpen(false);
+    };
+    window.addEventListener(FP_SET_VIEW_EVENT, onSetView);
+    return function () {
+      window.removeEventListener(FP_SET_VIEW_EVENT, onSetView);
+    };
+  }, []);
   const prefs = prefsRef.current !== null && typeof prefsRef.current === 'object' ? prefsRef.current : {};
 
   const [view, setView] = useState(function () {
@@ -1843,7 +1878,8 @@ function FpRoot() {
   );
 
   /* ---------------- 项目右键菜单 / 归档 / 删除 ---------------- */
-  const menuOpen = ctxMenu !== null && typeof ctxMenu === 'object' && typeof ctxMenu.projectId === 'string';
+  const menuOpen = ctxMenu !== null && typeof ctxMenu === 'object'
+    && (typeof ctxMenu.projectId === 'string' || typeof ctxMenu.lineId === 'string');
 
   function openProjectMenu(projectId, clientX, clientY) {
     if (typeof projectId !== 'string' || projectId === '') return;
@@ -1854,7 +1890,24 @@ function FpRoot() {
     const rawX = typeof clientX === 'number' && isFinite(clientX) ? clientX : 0;
     const rawY = typeof clientY === 'number' && isFinite(clientY) ? clientY : 0;
     setCtxMenu({
+      kind: 'project',
       projectId: projectId,
+      x: Math.max(8, Math.min(rawX, vw - width - 8)),
+      y: Math.max(8, Math.min(rawY, vh - height - 8)),
+    });
+  }
+
+  function openLineMenu(lineId, clientX, clientY) {
+    if (typeof lineId !== 'string' || lineId === '') return;
+    const width = 208;
+    const height = 208;
+    const vw = typeof window !== 'undefined' && typeof window.innerWidth === 'number' ? window.innerWidth : 1440;
+    const vh = typeof window !== 'undefined' && typeof window.innerHeight === 'number' ? window.innerHeight : 900;
+    const rawX = typeof clientX === 'number' && isFinite(clientX) ? clientX : 0;
+    const rawY = typeof clientY === 'number' && isFinite(clientY) ? clientY : 0;
+    setCtxMenu({
+      kind: 'line',
+      lineId: lineId,
       x: Math.max(8, Math.min(rawX, vw - width - 8)),
       y: Math.max(8, Math.min(rawY, vh - height - 8)),
     });
@@ -1865,8 +1918,14 @@ function FpRoot() {
   }
 
   function menuProject() {
-    if (!menuOpen || s === null) return null;
+    if (!menuOpen || s === null || typeof ctxMenu.projectId !== 'string') return null;
     return fpProjectById(s, ctxMenu.projectId) || null;
+  }
+
+  function menuLine() {
+    if (!menuOpen || s === null || typeof ctxMenu.lineId !== 'string') return null;
+    const lines = Array.isArray(s.businessLines) ? s.businessLines : [];
+    return lines.filter(function (line) { return line && line.id === ctxMenu.lineId; })[0] || null;
   }
 
   useEffect(
@@ -1910,6 +1969,32 @@ function FpRoot() {
     FpToast.push({
       tone: 'success',
       text: (archived ? '已归档「' : '已恢复「') + (project.title || '项目') + '」',
+    });
+  }
+
+  async function handleArchiveLine(line) {
+    closeProjectMenu();
+    if (!line) return;
+    const targets = projects.filter(function (project) {
+      return project && project.businessLineId === line.id && project.status !== 'archived';
+    });
+    if (targets.length === 0) {
+      FpToast.push({ tone: 'warn', text: '这条业务线下没有可归档的项目' });
+      return;
+    }
+    let archivedCount = 0;
+    for (const project of targets) {
+      const result = await fpDispatch('archiveProject', { projectId: project.id, archived: true });
+      if (result && result.ok === true) archivedCount += 1;
+    }
+    await fpRefresh();
+    if (archivedCount === 0) {
+      FpToast.push({ tone: 'error', text: '归档业务线失败' });
+      return;
+    }
+    FpToast.push({
+      tone: 'success',
+      text: '已归档业务线「' + (line.name || '未命名业务线') + '」及 ' + archivedCount + ' 个项目',
     });
   }
 
@@ -2494,9 +2579,8 @@ function FpRoot() {
     const archived = project.status === 'archived';
     const active = project.id === selectedProjectId;
     const progress = info !== null && typeof info.progress === 'number' ? fpClamp(info.progress, 0, 1) : null;
-    const ownerLine = lines.filter(function (item) { return item !== null && item !== undefined && item.id === project.businessLineId; })[0];
-    const lineName = ownerLine !== null && ownerLine !== undefined && typeof ownerLine.name === 'string' ? ownerLine.name : '';
-    const subText = (lineName !== '' ? lineName + ' · ' : '') + stage;
+    // 业务线名在外层标题已经出现，卡片里只留当前阶段，避免重复
+    const subText = stage;
     const dueTone = overdue ? 'error' : daysLeft === 0 ? 'today' : daysLeft === 1 ? 'soon' : '';
     const title = (project.title || '未命名项目') + ' · ' + stage + (dueText !== '' && dueText !== '—' ? ' · ' + dueText : '');
     const row = h(
@@ -2568,7 +2652,14 @@ function FpRoot() {
       { className: 'fp-line', key: line.id },
       h(
         'div',
-        { className: 'fp-line__head' },
+        {
+          className: 'fp-line__head',
+          onContextMenu: function (event) {
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            openLineMenu(line.id, event && event.clientX, event && event.clientY);
+          },
+        },
         h('span', { className: 'fp-line__name', title: line.name }, line.name || '未命名业务线'),
         h('span', { className: 'fp-line__count' }, String(lineProjects.length)),
         h(
@@ -2631,7 +2722,11 @@ function FpRoot() {
         h('span', null, '已归档'),
         h('span', { className: 'fp-line__count' }, String(sorted.length)),
       ),
-      archivedOpen ? sorted.map(renderProjectRow) : null,
+      archivedOpen
+        ? (sorted.length > 0
+            ? sorted.map(renderProjectRow)
+            : h('p', { key: 'archived-empty', className: 'fp-archived__empty' }, '没有已归档项目'))
+        : null,
     );
   }
 
@@ -2666,7 +2761,7 @@ function FpRoot() {
         linesSorted.length === 0
           ? h('p', { className: 'fp-nav__empty' }, '还没有业务线')
           : linesSorted.map(renderLine),
-        archivedProjects.length > 0 ? renderArchived() : null,
+        renderArchived(),
       ),
       h(
         'div',
@@ -2674,14 +2769,12 @@ function FpRoot() {
         h(
           'div',
           { className: 'fp-nav__actions' },
-          h(FpButton, { variant: 'default', size: 'sm', fullWidth: true, icon: 'plus', onClick: openCreateLine }, '新建业务线'),
           h(
             FpButton,
             {
-              variant: 'primary',
+              variant: 'default',
               size: 'sm',
               fullWidth: true,
-              icon: 'spark',
               title: '粘贴 PRD，让 AI 解析成项目与流程节点',
               disabled: s === null,
               onClick: function () {
@@ -3131,6 +3224,78 @@ function FpRoot() {
     );
   }
 
+  function renderLineMenu() {
+    if (!menuOpen) return null;
+    const line = menuLine();
+    if (line === null) return null;
+    const lineProjects = projects.filter(function (project) {
+      return project && project.businessLineId === line.id;
+    });
+    const archivable = lineProjects.filter(function (project) {
+      return project.status !== 'archived';
+    }).length;
+    const items = [
+      h(
+        'button',
+        {
+          key: 'new-project',
+          type: 'button',
+          role: 'menuitem',
+          className: 'fp-ctxmenu__item',
+          onClick: function () {
+            closeProjectMenu();
+            openProjectCreate(line.id);
+          },
+        },
+        '在此业务线新建项目',
+      ),
+      h(
+        'button',
+        {
+          key: 'rename',
+          type: 'button',
+          role: 'menuitem',
+          className: 'fp-ctxmenu__item',
+          onClick: function () {
+            closeProjectMenu();
+            openLineEdit(line);
+          },
+        },
+        '重命名业务线',
+      ),
+      h('div', { key: 'sep', className: 'fp-ctxmenu__sep', role: 'separator' }),
+      h(
+        'button',
+        {
+          key: 'archive-line',
+          type: 'button',
+          role: 'menuitem',
+          className: 'fp-ctxmenu__item',
+          disabled: archivable === 0,
+          title: archivable === 0 ? '该业务线下没有可归档的项目' : '归档该业务线下的全部项目',
+          onClick: function () {
+            handleArchiveLine(line);
+          },
+        },
+        '归档业务线' + (archivable > 0 ? '（' + archivable + ' 个项目）' : ''),
+      ),
+    ];
+    return h(
+      'div',
+      {
+        className: 'fp-ctxmenu',
+        role: 'menu',
+        'aria-label': '业务线操作',
+        ref: ctxMenuRef,
+        style: { left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' },
+        onMouseDown: function (event) {
+          if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+        },
+      },
+      items,
+    );
+  }
+
   function renderDeleteConfirm() {
     if (typeof deleteTarget !== 'string' || deleteTarget === '' || s === null) return null;
     const project = fpProjectById(s, deleteTarget);
@@ -3175,6 +3340,7 @@ function FpRoot() {
     renderSettingsModal(),
     renderDialogs(),
     renderProjectMenu(),
+    renderLineMenu(),
     renderDeleteConfirm(),
     h(FpToastHost),
   );

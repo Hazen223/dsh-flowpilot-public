@@ -30,6 +30,20 @@ function record(name, ok, detail) {
   console.log(line)
 }
 
+function getFreePort() {
+  return new Promise((resolve) => {
+    import('node:http').then(({ createServer }) => {
+      const probe = createServer()
+      probe.once('error', () => resolve(0))
+      probe.listen(0, '127.0.0.1', () => {
+        const address = probe.address()
+        const port = address && typeof address === 'object' ? address.port : 0
+        probe.close(() => resolve(port))
+      })
+    })
+  })
+}
+
 async function getJson(path) {
   const res = await fetch(BASE + path, { signal: AbortSignal.timeout(5000) })
   const text = await res.text()
@@ -131,6 +145,42 @@ try {
     'HTTP ' + out.status + ' devBuild=' + String(st.devBuild) + ' channel=' + String(st.channel) + ' updateAvailable=' + String(st.updateAvailable))
 } catch (error) {
   record('本地开发版：更新提示已抑制', false, error.message)
+}
+
+/* 本地只读网页（WEB-ACCESS.md）：状态 → 开启临时端口 → 页面/摘要可访问 → 写请求被拒 → 关闭 */
+try {
+  const before = await getJson('/flowpilot/api/webaccess')
+  const shapeOk = before.status === 200 && before.json && before.json.ok === true && before.json.status && typeof before.json.status.enabled === 'boolean'
+  record('本地只读网页：/webaccess 状态可读', shapeOk, 'HTTP ' + before.status)
+  if (shapeOk) {
+    const port = await getFreePort()
+    const post = (body) => fetch(BASE + '/flowpilot/api/webaccess', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    }).then(async (res) => ({ status: res.status, json: await res.json().catch(() => null) }))
+    const on = await post({ enabled: true, port })
+    const running = on.json && on.json.ok === true && on.json.status && on.json.status.running === true
+    record('本地只读网页：可开启并监听本机端口', running === true, 'HTTP ' + on.status + ' port=' + port)
+    if (running) {
+      const pageRes = await fetch(on.json.status.url, { signal: AbortSignal.timeout(5000) })
+      const pageText = await pageRes.text()
+      const summaryRes = await fetch('http://127.0.0.1:' + port + '/api/summary', { signal: AbortSignal.timeout(5000) })
+      const summary = await summaryRes.json().catch(() => null)
+      record(
+        '本地只读网页：页面与摘要可访问（只读看板）',
+        pageRes.status === 200 && pageText.indexOf('FlowPilot') !== -1 && summaryRes.status === 200 && summary && Array.isArray(summary.projects),
+        'HTTP ' + pageRes.status + '/' + summaryRes.status + ' projects=' + (summary && summary.projects ? summary.projects.length : '?'),
+      )
+      const writeRes = await fetch('http://127.0.0.1:' + port + '/api/summary', { method: 'POST', signal: AbortSignal.timeout(5000) })
+      record('本地只读网页：写请求被拒绝（只读）', writeRes.status === 405, 'HTTP ' + writeRes.status)
+    }
+    const off = await post({ enabled: false })
+    record('本地只读网页：可关闭并停止监听', !!(off.json && off.json.ok === true && off.json.status && off.json.status.running === false), 'HTTP ' + off.status)
+  }
+} catch (error) {
+  record('本地只读网页：/webaccess 状态可读', false, error.message)
 }
 
 /* 构建身份：/update/status 应暴露 buildLabel（版本+sha+dirty），用于排障时确认跑的是哪一版 */

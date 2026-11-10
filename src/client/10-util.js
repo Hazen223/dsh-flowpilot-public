@@ -51,8 +51,8 @@ const FP_LINK_KINDS = [
 const FP_VIEWS = [
   { id: 'flow', label: '流程', icon: 'flow' },
   { id: 'today', label: '今日', icon: 'today' },
-  { id: 'weekly', label: '周报', icon: 'report' },
   { id: 'handoff', label: '交接', icon: 'handoff' },
+  { id: 'weekly', label: '周报', icon: 'report' },
 ];
 
 /* ------------------------------ 主题色 ------------------------------
@@ -87,9 +87,10 @@ function fpAccentHueRead() {
 
 function fpAccentCss(hue) {
   const h = fpClampHue(hue);
+  // 只旋转色相：饱和度 100% 恒定，明度仅按浅/深主题各取一个固定值
   return {
     accent: 'light-dark(hsl(' + h + ' 100% 66.3%), hsl(' + h + ' 100% 68%))',
-    strong: 'light-dark(hsl(' + h + ' 100% 61.6%), hsl(' + h + ' 84% 63.1%))',
+    strong: 'light-dark(hsl(' + h + ' 100% 61.6%), hsl(' + h + ' 100% 63%))',
   };
 }
 
@@ -99,8 +100,13 @@ function fpApplyAccentHue(hue, persist) {
   const css = fpAccentCss(h);
   try {
     if (typeof document !== 'undefined' && document.documentElement) {
-      document.documentElement.style.setProperty('--fp-accent', css.accent);
-      document.documentElement.style.setProperty('--fp-accent-strong', css.strong);
+      const rootStyle = document.documentElement.style;
+      // 关键：不能直接覆盖 --fp-accent（.fp-root 里定义的同名变量会把它压回去，旧实现因此"滑条没用"）
+      rootStyle.setProperty('--fp-accent-runtime', css.accent);
+      rootStyle.setProperty('--fp-accent-runtime-strong', css.strong);
+      // 清掉旧版本可能残留在 :root 内联样式上的覆盖，避免变量名打架
+      rootStyle.removeProperty('--fp-accent');
+      rootStyle.removeProperty('--fp-accent-strong');
     }
   } catch (error) {
     /* 无 DOM 时静默 */
@@ -712,9 +718,10 @@ const CSS_BASE = String.raw`
   /* ===== 主色/强调/功能色（设计系统 功能色与业务主题色）===== */
   --fp-brand: light-dark(#0d0e10, #f0f1f2);         /* 主按钮填充（深色一 / 深色主题取反） */
   --fp-on-brand: light-dark(#ffffff, #0d0e10);      /* 深底字色 */
-  /* 主题色：紫色（设计系统 business-pink 同饱和度/明度的紫色变体，色相 275°） */
-  --fp-accent: light-dark(#b753ff, #bb5cff);        /* 业务主题色 */
-  --fp-accent-strong: light-dark(#ad3bff, #ae52f0); /* 强调字 */
+  /* 主题色：默认紫色（色相 275°）；运行时通过 --fp-accent-runtime 只替换色相，
+     饱和度/明度保持固定（见 fpAccentCss），不会变灰也不会变淡。 */
+  --fp-accent: var(--fp-accent-runtime, light-dark(#b753ff, #bb5cff));
+  --fp-accent-strong: var(--fp-accent-runtime-strong, light-dark(#ad3bff, #ae52f0));
   --fp-accent-soft: color-mix(in srgb, var(--fp-accent) 10%, transparent);
   --fp-ok: light-dark(#2ac864, #47cf79);            /* 绿色 */
   --fp-warn: #ffb027;                                /* 黄色 */

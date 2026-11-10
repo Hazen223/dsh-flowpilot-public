@@ -970,67 +970,34 @@ function AiPrdDialog(props) {
 
   /* ---------------- 渲染片段 ---------------- */
 
-  function renderStatusBanner() {
+  function renderStatusLine() {
     if (statusState === 'loading') {
-      return h(
-        'div',
-        { className: 'fp-ai-notice fp-ai-notice--info', role: 'status', 'aria-live': 'polite' },
-        h('span', { className: 'fp-ai-notice-icon', 'aria-hidden': 'true' }, h(FpIcon, { name: 'spark', size: 14 })),
-        h(
-          'div',
-          { className: 'fp-ai-notice-body' },
-          h('div', { className: 'fp-ai-notice-title' }, '正在检测 AI 服务…'),
-          h('p', { className: 'fp-ai-notice-desc' }, '检测结果只影响解析方式，不会阻塞输入 PRD。'),
-        ),
+      return h('div', { className: 'fp-ai-status' },
+        h('span', { className: 'fp-ai-status-dot', 'data-tone': 'muted' }),
+        h('span', { className: 'fp-ai-status-text' }, '正在检测 AI 服务…'),
       );
     }
     if (statusState === 'error' || status === null) {
-      const reason = status !== null && fpAiStr(status.reason) !== '' ? fpAiStr(status.reason) : '无法连接宿主 AI 状态接口';
-      return h(
-        'div',
-        { className: 'fp-ai-notice fp-ai-notice--error', role: 'status', 'aria-live': 'polite' },
-        h('span', { className: 'fp-ai-notice-icon', 'aria-hidden': 'true' }, h(FpIcon, { name: 'alert', size: 14 })),
-        h(
-          'div',
-          { className: 'fp-ai-notice-body' },
-          h('div', { className: 'fp-ai-notice-title' }, '无法检测 AI 可用性'),
-          h('p', { className: 'fp-ai-notice-desc' }, reason + '。仍可尝试解析：模型不可用时会自动退回规则解析。'),
-        ),
+      return h('div', { className: 'fp-ai-status', 'data-tone': 'warn' },
+        h('span', { className: 'fp-ai-status-dot' }),
+        h('span', { className: 'fp-ai-status-text' }, 'AI 状态未知，将使用规则解析'),
       );
     }
     if (status.available === true) {
       const model = fpAiStr(status.model);
       const provider = fpAiStr(status.provider);
-      let detail = '模型已就绪，解析结果只是提案，确认后才会写入数据。';
-      if (model !== '') {
-        detail = '模型：' + (provider !== '' ? provider + ' · ' : '') + model + '。解析结果只是提案，确认后才会写入数据。';
-      }
-      return h(
-        'div',
-        { className: 'fp-ai-notice fp-ai-notice--ok', role: 'status', 'aria-live': 'polite' },
-        h('span', { className: 'fp-ai-notice-icon', 'aria-hidden': 'true' }, h(FpIcon, { name: 'spark', size: 14 })),
-        h(
-          'div',
-          { className: 'fp-ai-notice-body' },
-          h('div', { className: 'fp-ai-notice-title' }, h(FpChip, { tone: 'success', dot: true }, 'AI 可用'), h('span', {}, '由模型解析 PRD')),
-          h('p', { className: 'fp-ai-notice-desc' }, detail),
-        ),
+      const label = [provider, model].filter(function (item) { return item !== ''; }).join(' · ');
+      return h('div', { className: 'fp-ai-status' },
+        h('span', { className: 'fp-ai-status-dot' }),
+        h('span', { className: 'fp-ai-status-text' }, label !== '' ? '由模型解析：' + label : '由模型解析'),
       );
     }
-    const reason = fpAiStr(status.reason) !== '' ? fpAiStr(status.reason) : '未配置可用模型';
-    return h(
-      'div',
-      { className: 'fp-ai-notice fp-ai-notice--warn', role: 'status', 'aria-live': 'polite' },
-      h('span', { className: 'fp-ai-notice-icon', 'aria-hidden': 'true' }, h(FpIcon, { name: 'alert', size: 14 })),
-      h(
-        'div',
-        { className: 'fp-ai-notice-body' },
-        h('div', { className: 'fp-ai-notice-title' }, h(FpChip, { tone: 'warn', dot: true }, 'AI 不可用'), h('span', {}, '将使用规则解析')),
-        h('p', { className: 'fp-ai-notice-desc' }, reason + '。规则解析只按标题与表格结构提取节点，结果会明确标注「规则解析」。'),
-      ),
+    const reason = fpAiStr(status.reason);
+    return h('div', { className: 'fp-ai-status', 'data-tone': 'warn' },
+      h('span', { className: 'fp-ai-status-dot' }),
+      h('span', { className: 'fp-ai-status-text' }, 'AI 不可用' + (reason !== '' ? '：' + reason : '') + '，将使用规则解析'),
     );
   }
-
   function renderLinePicker() {
     const options = lines.map(function (line) {
       return { value: line.id, label: line.name };
@@ -1062,15 +1029,20 @@ function AiPrdDialog(props) {
     const canParse = trimmed.length >= FP_AI_MIN_CHARS && reading !== true;
     const dropClassName = 'fp-ai-drop' + (dragActive === true ? ' fp-ai-drop--on' : '');
     const children = [
-      renderStatusBanner(),
+      renderStatusLine(),
       h(
-        FpField,
-        {
-          key: 'prd',
-          label: 'PRD 文本',
-          required: true,
-          hint: '至少 ' + FP_AI_MIN_CHARS + ' 字；可拖入 .md / .txt（仅本地读取）',
-        },
+        'div',
+        { key: 'prd', className: 'fp-ai-field' },
+        h(
+          'div',
+          { className: 'fp-ai-field-head' },
+          h('span', { className: 'fp-ai-field-label' }, 'PRD 文本', h('span', { className: 'fp-ai-req' }, '*')),
+          h(
+            'span',
+            { className: 'fp-ai-count' + (tooLong ? ' fp-ai-count--warn' : '') },
+            charCount + ' 字' + (tooLong ? ' · 超出 ' + FP_AI_MAX_CHARS + ' 字会截断' : ''),
+          ),
+        ),
         h(
           'div',
           { className: dropClassName, onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop },
@@ -1088,12 +1060,8 @@ function AiPrdDialog(props) {
         h(
           'div',
           { className: 'fp-ai-file-row' },
-          h(FpButton, { variant: 'ghost', size: 'sm', icon: 'upload', disabled: reading === true, onClick: pickFile }, reading === true ? '读取中…' : '选择 .md / .txt 文件'),
-          h(
-            'span',
-            { className: 'fp-ai-count' + (tooLong ? ' fp-ai-count--warn' : '') },
-            charCount + ' 字' + (tooLong ? '（超过 ' + FP_AI_MAX_CHARS + ' 字，解析时会截断）' : canParse ? '' : '（至少 ' + FP_AI_MIN_CHARS + ' 字）'),
-          ),
+          h(FpButton, { variant: 'ghost', size: 'sm', disabled: reading === true, onClick: pickFile }, reading === true ? '读取中…' : '选择 .md / .txt 文件'),
+          h('span', { className: 'fp-ai-file-hint' }, '仅本地读取'),
           h('input', {
             type: 'file',
             ref: fileInputRef,
@@ -1108,7 +1076,7 @@ function AiPrdDialog(props) {
       h(
         'div',
         { key: 'fields', className: 'fp-ai-grid' },
-        h(FpField, { key: 'line', label: '业务线（可选）' }, renderLinePicker()),
+        h(FpField, { key: 'line', label: '业务线' }, renderLinePicker()),
         h(
           FpField,
           { key: 'extra', label: '补充要求（可选）', hint: '例如：节点不超过 8 个、侧重投放流程。' },
@@ -1117,9 +1085,6 @@ function AiPrdDialog(props) {
       ),
     ];
     if (parseError !== null) children.push(renderErrorBlock('input-parse-error', parseError));
-    children.push(
-      h('p', { key: 'tip', className: 'fp-ai-hint' }, '解析只生成可编辑的提案，不会写入数据；点击「生成项目」后才会创建项目与节点。'),
-    );
     return h('div', { className: 'fp-ai-stage fp-ai-stage--input' }, children);
   }
 
@@ -1489,7 +1454,7 @@ function AiPrdDialog(props) {
     } else {
       const source = typeof text === 'string' ? text : '';
       const canParse = source.replace(/^\s+|\s+$/g, '').length >= FP_AI_MIN_CHARS && reading !== true;
-      hint = canParse ? '解析只生成提案，不写入数据。' : '至少输入 ' + FP_AI_MIN_CHARS + ' 个字才能解析。';
+      hint = canParse ? '解析只生成提案，不写入数据；确认后才会创建项目与节点。' : '至少 ' + FP_AI_MIN_CHARS + ' 个字才能解析。';
       actions.push(h(FpButton, { key: 'cancel', variant: 'ghost', onClick: requestClose }, FP_T('common.cancel', '取消')));
       actions.push(
         h(
@@ -1544,7 +1509,7 @@ function AiPrdDialog(props) {
             'div',
             { className: 'fp-ai-head-titles' },
             h('h2', { className: 'fp-ai-title', id: 'fp-ai-dialog-title' }, 'AI 建流程'),
-            h('p', { className: 'fp-ai-subtitle' }, '粘贴 PRD，解析成项目与流程节点；确认后才会写入。'),
+            h('p', { className: 'fp-ai-subtitle' }, '粘贴 PRD，解析成项目与流程节点。'),
           ),
         ),
         h(
@@ -1699,64 +1664,54 @@ const CSS_AI = String.raw`
   gap: var(--fp-sp-3);
   min-width: 0;
 }
-.fp-ai-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--fp-sp-3);
-  padding: var(--fp-sp-3);
-  border-radius: var(--fp-radius-md);
-  background: var(--fp-surface-2);
-  min-width: 0;
-}
-.fp-ai-notice--info {
-  background: color-mix(in srgb, var(--fp-info) 10%, var(--fp-surface-2));
-}
-.fp-ai-notice--ok {
-  background: color-mix(in srgb, var(--fp-ok) 12%, var(--fp-surface-2));
-}
-.fp-ai-notice--warn {
-  background: color-mix(in srgb, var(--fp-warn) 16%, var(--fp-surface-2));
-}
-.fp-ai-notice--error {
-  background: color-mix(in srgb, var(--fp-bad) 12%, var(--fp-surface-2));
-}
-.fp-ai-notice-icon {
-  flex: none;
-  display: inline-flex;
-  margin-top: 0;
-  color: var(--fp-text-tertiary);
-}
-.fp-ai-notice--info .fp-ai-notice-icon {
-  color: var(--fp-info);
-}
-.fp-ai-notice--ok .fp-ai-notice-icon {
-  color: var(--fp-ok);
-}
-.fp-ai-notice--warn .fp-ai-notice-icon {
-  color: var(--fp-warn-strong);
-}
-.fp-ai-notice--error .fp-ai-notice-icon {
-  color: var(--fp-bad);
-}
-.fp-ai-notice-body {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.fp-ai-notice-title {
+.fp-ai-status {
   display: flex;
   align-items: center;
-  gap: var(--fp-sp-1);
-  flex-wrap: wrap;
+  gap: var(--fp-sp-2);
+  min-width: 0;
+  font-size: var(--fp-font-sm);
+  color: var(--fp-text-dim);
+}
+.fp-ai-status-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fp-ok);
+}
+.fp-ai-status-dot[data-tone="muted"] { background: var(--fp-text-tertiary); }
+.fp-ai-status[data-tone="warn"] .fp-ai-status-dot { background: var(--fp-warn-strong); }
+.fp-ai-status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-sp-2);
+  min-width: 0;
+}
+.fp-ai-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fp-sp-2);
+  min-width: 0;
+}
+.fp-ai-field-label {
   font-size: var(--fp-font-sm);
   font-weight: 600;
   color: var(--fp-text);
 }
-.fp-ai-notice-desc {
-  margin: var(--fp-sp-1) 0 0;
-  font-size: var(--fp-font-sm);
-  line-height: 1.55;
-  color: var(--fp-text-dim);
-  overflow-wrap: anywhere;
+.fp-ai-req {
+  margin-left: var(--fp-sp-1);
+  color: var(--fp-bad);
+}
+.fp-ai-file-hint {
+  margin-left: auto;
+  font-size: var(--fp-font-xs);
+  color: var(--fp-text-tertiary);
 }
 .fp-ai-hint {
   margin: 0;
@@ -1828,9 +1783,11 @@ const CSS_AI = String.raw`
   border: 0;
 }
 .fp-ai-count {
+  margin-left: auto;
   font-size: var(--fp-font-xs);
   color: var(--fp-text-tertiary);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .fp-ai-count--warn {
   color: var(--fp-warn-strong);

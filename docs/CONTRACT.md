@@ -151,6 +151,9 @@ flowpilot/
   之后 `addLink(kind:'design')` 会自动补完成。
 - `derived.today.upcoming` 只与 `recommended` 去重，可能与 `followUps` 重叠。
 - 周五 12:05 之后首次读 `/state` 会自动补生成本周周报草稿（revision 会 +1，只补一次）。
+- 周报正文首段是「需求概述」：每个进行中/本周交付的项目给出 PRD 摘要（`project.summary`，缺失时用剩余节点拼）、
+  当前聚焦节点与说明、设计进度（设计中 / 设计完成 / 开发中 / 验收中 / 验收完成 / 验收完成（二次验收）/ 已交付）、
+  下一节点的计划时间（取 `plannedAt` → `dueAt` → `followUpAt`）。
 
 ---
 
@@ -211,6 +214,8 @@ flowpilot/
 |---|---|---|
 | GET | `/flowpilot/api/state` | `{ok, revision, state, derived}` |
 | POST | `/flowpilot/api/action` | body `{action, payload}` → `{ok, revision, state, derived, result}`；失败 `4xx/200 {ok:false, error, state?, derived?}` |
+| GET | `/flowpilot/api/webaccess` | 本地只读网页状态：`{ok, status:{enabled, running, host, port, url, startedAt, error}}`（见 `docs/WEB-ACCESS.md`） |
+| POST | `/flowpilot/api/webaccess` | body `{enabled?, port?}` → 开关/改端口，返回 `{ok, status}` |
 | GET | `/flowpilot/api/export` | 备份 JSON（`content-disposition: attachment`） |
 | POST | `/flowpilot/api/import` | body = 备份 JSON，整体替换 |
 

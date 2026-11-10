@@ -463,6 +463,19 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
   const [appendStart, setAppendStart] = useState('');
   const [appendBusy, setAppendBusy] = useState(false);
   const [appendError, setAppendError] = useState('');
+  const [fabOpen, setFabOpen] = useState(false);
+
+  useEffect(function () {
+    if (!fabOpen) return undefined;
+    function onKeyDown(event) {
+      if (event && event.key === 'Escape') setFabOpen(false);
+    }
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('keydown', onKeyDown);
+      return function () { document.removeEventListener('keydown', onKeyDown); };
+    }
+    return undefined;
+  }, [fabOpen]);
 
   const nodePackTemplates = typeof FP_NODE_PACK_TEMPLATES === 'undefined' ? [] : FP_NODE_PACK_TEMPLATES;
 
@@ -516,6 +529,84 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
         setAppendBusy(false);
         setAppendError(cause && cause.message ? cause.message : '追加模板失败');
       });
+  }
+
+  /* 流程看板右下角：圆形「+」按钮，展开选择「追加节点模板 / 添加验收流程」 */
+  function renderFlowFab() {
+    if (archived) return null;
+    const items = [
+      {
+        key: 'append',
+        label: '追加节点模板',
+        disabled: flows.length === 0,
+        hint: flows.length === 0 ? '先创建一个流程，再追加节点模板' : '把一套节点模板追加到已有流程',
+        run: openAppendTemplate,
+      },
+      {
+        key: 'acceptance',
+        label: '添加验收流程',
+        disabled: hasAcceptance,
+        hint: hasAcceptance ? '项目已包含验收流程' : '为项目添加验收流程',
+        run: requestAddFlow,
+      },
+    ];
+    const children = [];
+    if (fabOpen) {
+      children.push(
+        h('div', { key: 'backdrop', className: 'fp-flow-fab-backdrop', onClick: function () { setFabOpen(false); } }),
+      );
+      children.push(
+        h(
+          'div',
+          { key: 'menu', className: 'fp-flow-fab-menu', role: 'menu' },
+          items.map(function (item) {
+            return h(
+              'button',
+              {
+                key: item.key,
+                type: 'button',
+                className: 'fp-flow-fab-item',
+                role: 'menuitem',
+                disabled: item.disabled,
+                title: item.hint,
+                onClick: function () {
+                  setFabOpen(false);
+                  item.run();
+                },
+              },
+              h(FpIcon, { name: 'plus', size: 13 }),
+              h('span', {}, item.label),
+            );
+          }),
+        ),
+      );
+    }
+    children.push(
+      h(
+        'button',
+        {
+          key: 'fab',
+          type: 'button',
+          className: 'fp-flow-fab',
+          /* 内联样式优先级高于任何选择器（除非宿主 !important）；正圆画在内层 disc 上 */
+          style: { width: '40px', height: '40px', aspectRatio: '1 / 1', padding: '0', border: '0', background: 'transparent', borderRadius: '999px' },
+          'aria-label': '添加节点或流程',
+          'aria-haspopup': 'menu',
+          'aria-expanded': fabOpen ? 'true' : 'false',
+          'data-open': fabOpen ? 'true' : 'false',
+          onClick: function () { setFabOpen(!fabOpen); },
+        },
+        h(
+          'span',
+          {
+            className: 'fp-flow-fab-disc',
+            style: { borderRadius: '999px', clipPath: 'circle(50% at 50% 50%)' },
+          },
+          h(FpIcon, { name: 'plus', size: 20 }),
+        ),
+      ),
+    );
+    return h('div', { className: 'fp-flow-fab-wrap' }, children);
   }
 
   function renderAppendDialog() {
@@ -676,7 +767,7 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
             h(
               'span',
               { className: fpFlowClass('fp-flow-marker', 'fp-flow-marker--' + node.status, current && 'fp-is-current') },
-              h(FpIcon, { name: fpFlowStatusIcon(node.status), size: 13 }),
+              h(FpIcon, { name: fpFlowStatusIcon(node.status), size: 12 }),
             ),
             showLine ? h('span', { className: lineClass, 'aria-hidden': 'true' }) : null,
             returnEdge
@@ -818,38 +909,6 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
           'div',
           { className: 'fp-flow-head-actions' },
           archived ? h(FpChip, { tone: 'warn', dot: true }, '已归档 · 只读') : null,
-          !archived
-            ? h(
-                'div',
-                { key: 'btns', className: 'fp-flow-head-btns' },
-                h(
-                  FpButton,
-                  {
-                    key: 'append',
-                    size: 'sm',
-                    variant: 'default',
-                    icon: 'plus',
-                    disabled: flows.length === 0,
-                    title: flows.length === 0 ? '先创建一个流程，再追加节点模板' : '把一套节点模板追加到已有流程（如「实验推进」）',
-                    onClick: openAppendTemplate,
-                  },
-                  '追加节点模板',
-                ),
-                h(
-                  FpButton,
-                  {
-                    key: 'acceptance',
-                    size: 'sm',
-                    variant: 'quiet',
-                    icon: 'plus',
-                    disabled: hasAcceptance,
-                    title: hasAcceptance ? '项目已包含验收流程' : '为项目添加验收流程（A 系列节点）',
-                    onClick: requestAddFlow,
-                  },
-                  '添加验收流程',
-                ),
-              )
-            : null,
         ),
       ),
       h(
@@ -874,6 +933,7 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
         : null,
     ),
     h('div', { className: 'fp-flow-canvas' }, h('div', { className: 'fp-flow-inner' }, ...blocks)),
+    renderFlowFab(),
     renderAppendDialog(),
   );
 }
@@ -1318,6 +1378,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
             {
               key: 'start',
               fullWidth: true,
+              /* 只有「开始处理 / 继续修改」是主操作：用实心强调底，其余动作保持中性 */
               variant: 'primary',
               icon: 'play',
               disabled: archived || !!busy,
@@ -1333,7 +1394,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
           {
             key: 'complete',
             fullWidth: true,
-            variant: gate.ok && (status === 'active' || status === 'waiting' || status === 'blocked') ? 'primary' : 'default',
+            variant: 'default',
             icon: 'check',
             disabled: completeDisabled,
             title: gate.ok ? '完成节点' : '无法完成：' + gate.error,
@@ -1389,7 +1450,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
           {
             key: 'skip',
             size: 'sm',
-            variant: 'ghost',
+            variant: 'default',
             icon: 'skip',
             // 未解锁节点也允许跳过（范围裁剪）：只有归档/已完成/忙碌时禁用
             disabled: archived || finished || !!busy,
@@ -1871,6 +1932,7 @@ const CSS_FLOW = String.raw`
   height: 100%;
   min-height: 0;
   min-width: 0;
+  position: relative;
   /* 节点区的灰底从顶部开始：延伸到项目信息卡后面（只铺背景，不影响任何元素位置） */
   background: var(--fp-well);
   border-radius: var(--fp-radius-lg);
@@ -1989,18 +2051,101 @@ const CSS_FLOW = String.raw`
   /* 固定在信息卡右侧，不随标题换行漂移 */
   margin-left: auto;
 }
-.fp-flow-head-btns {
+/* ---- 流程看板右下角浮动「+」：圆形按钮 + 展开菜单（悬浮在节点卡片之上） ---- */
+.fp-flow-fab-wrap {
+  position: absolute;
+  right: var(--fp-sp-4);
+  bottom: var(--fp-sp-4);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--fp-sp-2);
+}
+.fp-flow-fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+}
+.fp-flow-fab {
+  position: relative;
+  z-index: 30;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: var(--fp-shadow-2);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+/* 圆形本体画在内层：clip-path 强制正圆（宿主即便用 !important 改 button 半径也不受影响），
+   阴影留在外层按钮上，不会被裁掉 */
+.fp-flow-fab-disc {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 中性配色：面底色 + 次级文字图标，不用强调色/主色 */
+  background: var(--fp-surface);
+  color: var(--fp-text-dim);
+  border-radius: 999px;
+  clip-path: circle(50% at 50% 50%);
+}
+.fp-flow-fab:hover .fp-flow-fab-disc {
+  color: var(--fp-text);
+}
+.fp-flow-fab:hover {
+  transform: scale(1.04);
+  box-shadow: var(--fp-shadow-3);
+}
+.fp-flow-fab:active {
+  transform: scale(0.96);
+}
+.fp-flow-fab[data-open="true"] {
+  transform: rotate(45deg);
+}
+.fp-flow-fab:focus-visible {
+  outline: none;
+  box-shadow: var(--fp-shadow-3), 0 0 0 3px color-mix(in srgb, var(--fp-accent) 45%, transparent);
+}
+.fp-flow-fab-menu {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-sp-1);
+  padding: var(--fp-sp-2);
+  min-width: 176px;
+  /* 悬浮卡片用更大圆角，和 FAB 的圆形更协调 */
+  border-radius: var(--fp-radius-lg);
+  background: var(--fp-overlay);
+  box-shadow: var(--fp-shadow-3);
+}
+.fp-flow-fab-item {
   display: flex;
   align-items: center;
   gap: var(--fp-sp-2);
+  height: 36px;
+  padding: 0 var(--fp-sp-3);
+  border: 0;
+  border-radius: var(--fp-radius-sm);
+  background: transparent;
+  color: var(--fp-text);
+  font: inherit;
+  font-size: var(--fp-font-sm);
+  text-align: left;
+  cursor: pointer;
 }
-/* 宽度不够时两个按钮竖排（一上一下），仍贴右边 */
-@container (max-width: 560px) {
-  .fp-flow-head-btns {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--fp-sp-1);
-  }
+.fp-flow-fab-item:hover:not(:disabled) {
+  background: var(--fp-hover);
+}
+.fp-flow-fab-item:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .fp-flow-progress {
   display: flex;
@@ -2085,7 +2230,7 @@ const CSS_FLOW = String.raw`
   width: 100%;
   max-width: 920px;
   margin: 0 auto;
-  padding: var(--fp-sp-4) var(--fp-sp-4) var(--fp-sp-10);
+  padding: var(--fp-sp-4) var(--fp-sp-4) 96px;
 }
 /* 空态：中栏只有一张居中的信息卡 */
 .fp-flow--empty {
@@ -2160,12 +2305,15 @@ const CSS_FLOW = String.raw`
 .fp-flow-marker {
   position: relative;
   z-index: 1;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--fp-radius-pill);
+  width: 20px;
+  height: 20px;
+  aspect-ratio: 1 / 1;
+  /* 小圆形标记（不用圆角矩形） */
+  border-radius: 999px;
   background: var(--fp-pressed);
   color: var(--fp-text-tertiary);
   transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
@@ -2191,8 +2339,9 @@ const CSS_FLOW = String.raw`
   color: var(--fp-warn-strong);
 }
 .fp-flow-marker--completed {
-  background: color-mix(in srgb, var(--fp-ok) 14%, var(--fp-surface));
-  color: var(--fp-ok);
+  /* 绿色小圆：底色比之前略实一点，但仍是低对比的浅绿 */
+  background: color-mix(in srgb, var(--fp-ok) 16%, var(--fp-surface));
+  color: color-mix(in srgb, var(--fp-ok) 82%, var(--fp-text-dim));
 }
 .fp-flow-marker--skipped {
   background: var(--fp-pressed);
@@ -2203,36 +2352,37 @@ const CSS_FLOW = String.raw`
   color: var(--fp-text-quaternary);
 }
 .fp-flow-marker.fp-is-current {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fp-accent) 16%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fp-accent) 14%, transparent);
 }
 /* 实线 / 回退虚线共用同一条竖直轴：水平中心 = 导轨中心 = marker 圆心（16px），
-   竖直从 marker 圆心（28/2=14）起，并向下延伸过行距直抵下一行顶部，相邻节点间不漏线。 */
+   竖直从 marker 圆心（20/2=10）起，并向下延伸过行距直抵下一行顶部，相邻节点间不漏线。
+   线宽 1.5px、灰阶取「比背景略深一档」，可见但不抢节点卡的注意力。 */
 .fp-flow-line,
 .fp-flow-return-line {
   position: absolute;
   left: 50%;
-  top: 14px;
+  top: 10px;
   bottom: calc(-1 * var(--fp-flow-row-gap));
-  width: 2px;
+  width: 1.5px;
   transform: translateX(-50%);
   border-radius: var(--fp-radius-pill);
 }
 .fp-flow-line {
-  background: var(--fp-border-strong);
+  background: color-mix(in srgb, var(--fp-border-strong) 55%, var(--fp-text-quaternary));
 }
 .fp-flow-line.fp-is-dashed {
   background: repeating-linear-gradient(
     to bottom,
-    var(--fp-border-strong) 0 6px,
-    transparent 6px 12px
+    color-mix(in srgb, var(--fp-border-strong) 60%, var(--fp-text-quaternary)) 0 4px,
+    transparent 4px 9px
   );
 }
 .fp-flow-return-line {
   /* 回退虚线：实色缺口盖住底层实线，读起来是一条居中的橙色虚线而非双线 */
   background: repeating-linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--fp-warn-strong) 72%, var(--fp-well)) 0 4px,
-    var(--fp-well) 4px 10px
+    color-mix(in srgb, var(--fp-warn-strong) 62%, transparent) 0 3px,
+    transparent 3px 8px
   );
 }
 .fp-flow-bridge {
@@ -2254,12 +2404,12 @@ const CSS_FLOW = String.raw`
   left: 50%;
   top: 0;
   bottom: calc(-1 * var(--fp-flow-row-gap));
-  width: 2px;
+  width: 1.5px;
   transform: translateX(-50%);
   background: repeating-linear-gradient(
     to bottom,
-    var(--fp-border-strong) 0 6px,
-    transparent 6px 12px
+    color-mix(in srgb, var(--fp-border-strong) 60%, var(--fp-text-quaternary)) 0 4px,
+    transparent 4px 9px
   );
 }
 .fp-flow-bridge-node {
@@ -2644,6 +2794,18 @@ const CSS_FLOW = String.raw`
 }
 /* 主操作与下方次要操作行：上下间距 12px；横向按钮之间仍为 8px */
 .fp-detail-actions { display: flex; flex-direction: column; gap: var(--fp-sp-3); }
+/* 详情分区底色是 surface-2；默认按钮若也用 surface-2 会完全糊在一起。
+   这里把分区内的 default 按钮抬到 surface 一档（两套主题都有明确轮廓），不用强调色。 */
+.fp-detail-sec .fp-btn--default {
+  background: var(--fp-surface);
+}
+.fp-detail-sec .fp-btn--default:hover:not(:disabled) {
+  /* 注意：light 主题的 --fp-hover 正好等于分区底色（surface-2），会把按钮"hover 没了" */
+  background: var(--fp-pressed);
+}
+.fp-detail-sec .fp-btn--default:active:not(:disabled) {
+  background: color-mix(in srgb, var(--fp-pressed) 85%, var(--fp-text) 6%);
+}
 .fp-detail-action-row { display: flex; gap: var(--fp-sp-2); }
 .fp-detail-action-row > * { flex: 1 1 0; min-width: 0; }
 .fp-detail-approval-list { display: flex; flex-direction: column; gap: var(--fp-sp-2); }
@@ -2700,13 +2862,35 @@ const CSS_FLOW = String.raw`
 .fp-dt-input {
   width: 100%;
   height: 32px;
-  padding: 0 var(--fp-sp-2);
+  padding: 0 var(--fp-sp-3);
+  /* 原生 datetime-local/date 输入框：必须清掉 UA 的 2px 黑边与原生外观 */
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
   border-radius: var(--fp-radius-md);
-  background: var(--fp-base);
+  /* 分区底色是 surface-2，这里用 surface 让输入框浮起来（两套主题都是） */
+  background: var(--fp-surface);
   color: var(--fp-text);
   font: inherit;
-  font-size: var(--fp-font-xs);
+  font-size: var(--fp-font-md);
   font-variant-numeric: tabular-nums;
+  /* 让日期选择器图标跟随浅/深主题（否则深色主题下是黑图标） */
+  color-scheme: inherit;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+.fp-dt-input:hover:not(:disabled) {
+  background: var(--fp-hover);
+}
+.fp-dt-input::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+.fp-dt-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+.fp-dt-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .fp-dt-input:focus-visible {
   outline: none;

@@ -155,6 +155,8 @@ function FpQuickCard(props) {
     } catch (error) {
       /* 偏好写入失败不影响打开面板 */
     }
+    // 已挂载的 Shell 不会重读 localStorage：必须通过事件通知它切视图
+    if (typeof fpRequestView === 'function') fpRequestView(view);
     openPanel();
     if (close !== null) close();
   }

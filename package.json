@@ -1,6 +1,6 @@
 {
   "name": "dsh-flowpilot",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "description": "FlowPilot —— 流程节点驱动的个人项目管理面板：业务线/项目/流程节点、双角色确认与退回、工作节奏感知、日终交接与周报、AI 建流程、GitHub/WebDAV 同步（记录级三方合并 + 写后自动同步）、版本检查与一键更新。",

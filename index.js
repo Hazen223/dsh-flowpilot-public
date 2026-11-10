@@ -23,6 +23,7 @@ import { createEngine, summarizeResult } from './lib/domain.js'
 import { API_PATHS, createRoutes } from './lib/http.js'
 import { createSyncService } from './lib/sync.js'
 import { createUpdateService } from './lib/update.js'
+import { createWebAccessService } from './lib/webaccess.js'
 import { AI_TOOL_ACTIONS, FP_SYNC_ACTIONS, createFlowPilotSyncTool, createFlowPilotTool, toPayload } from './lib/tooldef.js'
 import { FpError } from './lib/util.js'
 
@@ -47,7 +48,9 @@ function normalizeConfig(rawConfig) {
   const aiTimeoutMs = Number(raw.aiTimeoutMs) > 0 ? Number(raw.aiTimeoutMs) : undefined
   // 同步配置文件位置（默认 <dataDir>/sync.json，即 ~/.dsh/flowpilot/sync.json；测试可覆盖）
   const syncFile = typeof raw.syncFile === 'string' && raw.syncFile.trim() !== '' ? raw.syncFile.trim() : undefined
-  return { dataDir, dataFile, aiProvider, aiModel, aiTimeoutMs, syncFile }
+  // 本地只读网页的配置（机器本地偏好，默认 <dataDir>/web-access.json）
+  const webAccessFile = typeof raw.webAccessFile === 'string' && raw.webAccessFile.trim() !== '' ? raw.webAccessFile.trim() : undefined
+  return { dataDir, dataFile, aiProvider, aiModel, aiTimeoutMs, syncFile, webAccessFile }
 }
 
 function errorText(error) {
@@ -326,7 +329,7 @@ function registerTool(ctx, engine, aiService, syncService, logger) {
   }
 }
 
-function registerRoutes(ctx, engine, aiService, syncService, updateService, logger) {
+function registerRoutes(ctx, engine, aiService, syncService, updateService, webAccessService, logger) {
   const webServer = resolveWebServer(ctx, logger)
   if (!webServer) {
     logger?.info?.('[flowpilot] webServer 不可用，跳过 HTTP 路由注册（工具仍可正常使用）')
@@ -334,7 +337,7 @@ function registerRoutes(ctx, engine, aiService, syncService, updateService, logg
   }
   let routes
   try {
-    routes = createRoutes({ engine, aiService, syncService, updateService, logger })
+    routes = createRoutes({ engine, aiService, syncService, updateService, webAccessService, logger })
   } catch (error) {
     logger?.warn?.(`[flowpilot] 创建 HTTP 路由失败：${errorText(error)}`)
     return
@@ -402,8 +405,15 @@ export function apply(ctx, rawConfig) {
   } catch (error) {
     logger?.warn?.(`[flowpilot] 创建更新服务失败（版本检查暂不可用，其余功能不受影响）：${errorText(error)}`)
   }
+  // 本地只读网页（可选）：默认关闭，设置里打开后监听 127.0.0.1:<port>
+  let webAccessService = null
+  try {
+    webAccessService = createWebAccessService({ engine, logger, configFile: config.webAccessFile })
+  } catch (error) {
+    logger?.warn?.(`[flowpilot] 创建本地网页服务失败（网页访问暂不可用）：${errorText(error)}`)
+  }
   registerTool(ctx, engine, aiService, syncService, logger)
-  registerRoutes(ctx, engine, aiService, syncService, updateService, logger)
+  registerRoutes(ctx, engine, aiService, syncService, updateService, webAccessService, logger)
   // 启动后异步拉取一次（仅 behavior.autoPullOnStart 且已配置；非阻塞、失败只记 lastError）
   try {
     syncService?.start?.()
@@ -415,6 +425,28 @@ export function apply(ctx, rawConfig) {
     updateService?.start?.()
   } catch (error) {
     logger?.warn?.(`[flowpilot] 启动版本自动检查失败（忽略）：${errorText(error)}`)
+  }
+  // 上次开着的话，启动时恢复只读网页（失败只记状态，不阻塞插件）
+  try {
+    Promise.resolve(webAccessService?.startup?.()).catch((error) => {
+      logger?.warn?.(`[flowpilot] 恢复本地网页失败（忽略）：${errorText(error)}`)
+    })
+  } catch (error) {
+    logger?.warn?.(`[flowpilot] 恢复本地网页失败（忽略）：${errorText(error)}`)
+  }
+  // 插件卸载时关掉网页服务
+  if (webAccessService && typeof ctx?.effect === 'function') {
+    try {
+      ctx.effect(() => () => {
+        try {
+          webAccessService.dispose?.()
+        } catch {
+          // 释放失败忽略
+        }
+      }, 'flowpilot: web-access server')
+    } catch (error) {
+      logger?.warn?.(`[flowpilot] 注册网页服务清理失败（忽略）：${errorText(error)}`)
+    }
   }
   logger?.info?.(`[flowpilot] 已就绪 · 数据文件=${engine.dataFile}`)
 }

@@ -1121,6 +1121,101 @@ function HandoffView({ state, derived, onOpenProject }) {
 /* 设置与备份（PRD §4 / §6 / §9.4）                                    */
 /* ------------------------------------------------------------------ */
 
+/* 网页访问：本地只读网页的开关 / 端口 / 链接（宿主侧 /flowpilot/api/webaccess） */
+function FpWebAccessGroup() {
+  const [status, setStatus] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [portText, setPortText] = React.useState('4173');
+  const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(function () {
+    let alive = true;
+    fetch('/flowpilot/api/webaccess', { cache: 'no-store' })
+      .then(function (res) { return res.json(); })
+      .then(function (out) {
+        if (!alive) return;
+        if (out && out.ok && out.status) {
+          setStatus(out.status);
+          setPortText(String(out.status.port));
+        }
+      })
+      .catch(function () { if (alive) setError('读取网页访问状态失败'); });
+    return function () { alive = false; };
+  }, []);
+
+  function save(patch) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    fetch('/flowpilot/api/webaccess', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+      .then(function (res) { return res.json().then(function (out) { return { ok: res.ok && out && out.ok === true, out: out || {} }; }); })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.out.error || '保存失败');
+        setStatus(result.out.status);
+        setPortText(String(result.out.status.port));
+        setCopied(false);
+      })
+      .catch(function (err) { setError(err && err.message ? err.message : '保存失败'); })
+      .finally(function () { setBusy(false); });
+  }
+
+  function copyUrl() {
+    const url = status && status.url ? status.url : '';
+    if (url === '' || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    navigator.clipboard.writeText(url).then(function () { setCopied(true); }).catch(function () {});
+  }
+
+  const enabled = status !== null && status.enabled === true;
+  const running = status !== null && status.running === true;
+  const url = status !== null && status.url ? status.url : '';
+  const children = [];
+  children.push(
+    h(FpSwitch, {
+      key: 'switch',
+      checked: enabled,
+      disabled: busy || status === null,
+      label: '本地只读网页',
+      description: running && url !== '' ? url : '在本机浏览器直接查看今日待办与项目进度',
+      onChange: function (value) { save({ enabled: value }); },
+    }),
+  );
+  children.push(
+    h(FpField, { key: 'port', label: '端口', hint: '1024–65535' },
+      h('div', { className: 'fp-v-webaccess-row' },
+        h(FpInput, {
+          type: 'number',
+          value: portText,
+          width: 112,
+          disabled: busy,
+          onChange: function (value) { setPortText(value); },
+          onEnter: function () { save({ port: Number(portText) }); },
+        }),
+        h(FpButton, {
+          size: 'sm',
+          variant: 'default',
+          disabled: busy,
+          onClick: function () { save({ port: Number(portText) }); },
+        }, busy ? '保存中…' : '应用'),
+      ),
+    ),
+  );
+  if (running && url !== '') {
+    children.push(
+      h('div', { key: 'url', className: 'fp-v-webaccess-url' },
+        h('span', { className: 'fp-v-webaccess-link', title: url }, url),
+        h(FpButton, { size: 'sm', variant: 'quiet', onClick: copyUrl }, copied ? '已复制' : '复制链接'),
+      ),
+    );
+  }
+  if (error !== '') children.push(h('div', { key: 'err', className: 'fp-v-form-error', role: 'alert' }, error));
+  return fpvSettingsGroup('网页访问', null, children);
+}
+
 function SettingsView({ state, derived, compact }) {
   const isCompact = compact === true;
   const st = state || {};
@@ -1534,6 +1629,7 @@ function SettingsView({ state, derived, compact }) {
           )
         )
       ),
+      h(FpWebAccessGroup, { key: 'webaccess' }),
       fpvSettingsGroup(fpvT('settings.workSlots', '工作时段'), null, slotsChildren),
       fpvSettingsGroup('静默窗', null, silentChildren),
       fpvSettingsGroup(fpvT('settings.rhythm', '节奏与提醒'), null, rhythmChildren),
@@ -1543,7 +1639,7 @@ function SettingsView({ state, derived, compact }) {
           label: '完成证据类型',
           hint: '不选 = 任意类型',
         },
-          h('div', { className: 'fp-v-chiprow' },
+          h('div', { className: 'fp-v-chip-row' },
             FP_EVIDENCE_KIND_LABELS && Object.keys(FP_EVIDENCE_KIND_LABELS).length > 0
               ? Object.keys(FP_EVIDENCE_KIND_LABELS).map(function (kind) {
                   const on = draft.evidenceKinds.indexOf(kind) !== -1;
@@ -2566,11 +2662,18 @@ const CSS_VIEWS = String.raw`
 
 /* ===== 设置：外层 surface 卡 + 行内表单，输入 = 下沉面无描边 ===== */
 .fp-v-settings{max-width:760px;}
+/* 同步 / 版本更新面板也作为「功能卡片」承接：卡片底 surface，内部小卡 surface-2 */
+.fp-v-settings > .fp-sync,
+.fp-v-settings > .fp-update {
+  background: var(--fp-surface);
+  border-radius: var(--fp-radius-lg);
+  padding: var(--fp-sp-4);
+}
 .fp-v-group{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:var(--fp-radius-lg);background:var(--fp-surface);min-width:0;}
 .fp-v-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .fp-v-group-title{font-size:var(--fp-font-md);font-weight:650;color:var(--fp-v-text);}
 .fp-v-group-hint{font-size:var(--fp-font-xs);color:var(--fp-v-text-4);text-align:right;overflow-wrap:anywhere;}
-.fp-v-group-body{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.fp-v-group-body{display:flex;flex-direction:column;gap:12px;min-width:0;}
 .fp-v-slot-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;padding:8px 12px;border-radius:var(--fp-radius-md);}
 .fp-v-text-inline{flex:1 1 150px;min-width:120px;height:32px;padding:0 12px;border-radius:var(--fp-radius-md);border:none;background:var(--fp-surface-2);color:var(--fp-v-text);font:inherit;font-size:var(--fp-font-sm);}
 .fp-v-text-inline::placeholder{color:var(--fp-v-text-4);}
@@ -2719,6 +2822,29 @@ const CSS_VIEWS = String.raw`
 }
 
 /* ---- 同步节奏 ---- */
+.fp-v-webaccess-row {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-sp-2);
+}
+.fp-v-webaccess-url {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-sp-2);
+  padding: var(--fp-sp-2) var(--fp-sp-3);
+  border-radius: var(--fp-radius-md);
+  background: var(--fp-surface-2);
+}
+.fp-v-webaccess-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--fp-mono);
+  font-size: var(--fp-font-xs);
+  color: var(--fp-text-dim);
+}
 .fp-v-sync-interval-row {
   display: flex;
   align-items: center;
@@ -2726,7 +2852,6 @@ const CSS_VIEWS = String.raw`
 }
 
 /* ---- 设置：证据类型多选 chip ---- */
-.fp-v-chiprow{display:flex;flex-wrap:wrap;gap:8px;}
 .fp-v-chip{
   height:28px;padding:0 12px;border:0;border-radius:var(--fp-radius-pill);
   background:var(--fp-surface-2);color:var(--fp-text-dim);

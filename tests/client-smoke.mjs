@@ -548,6 +548,24 @@ async function main() {
     const statusWords = ['未解锁', '待开始', '进行中', '待确认', '已阻塞', '待修改', '已完成', '已跳过']
     const hit = statusWords.filter((word) => canvasJoined.indexOf(word) !== -1)
     if (hit.length < 3) fail('流程画布的状态标签不足（命中 ' + hit.length + '：' + hit.join('、') + '）')
+    // 标题栏不再放操作按钮；操作收敛到画布右下角的圆形「+」
+    if (canvasJoined.indexOf('追加节点模板') !== -1) fail('流程标题栏不应再显示「追加节点模板」按钮')
+    if (canvasJoined.indexOf('添加验收流程') !== -1) fail('流程标题栏不应再显示「添加验收流程」按钮')
+    const flowClasses = []
+    collectClassNames(React.createElement(components.FlowView, {
+      state: fixture.state,
+      derived: fixture.derived,
+      project: firstProject,
+      selection: {},
+      onSelectNode: () => {},
+      onCollapseDetail: () => {},
+      onCreateProject: () => {},
+      onAddFlow: () => {},
+    }, null), flowClasses, 0)
+    const hasClass = (cls) => flowClasses.some((name) => typeof name === 'string' && name.split(/\s+/).indexOf(cls) !== -1)
+    if (!hasClass('fp-flow-fab')) fail('流程看板缺少右下角浮动的「+」按钮')
+    if (!hasClass('fp-flow-fab-disc')) fail('FAB 缺少内层正圆 disc（clip-path 保证正圆）')
+    if (hasClass('fp-flow-head-btns')) fail('流程标题栏不应再渲染 .fp-flow-head-btns')
     notes.push('流程画布文本 ' + canvasTexts.length + ' 段，状态标签命中：' + hit.join('、'))
     notes.push('主面板可见文本 ' + texts.length + ' 段，前 12 段：' + texts.slice(0, 12).join(' / '))
   }
