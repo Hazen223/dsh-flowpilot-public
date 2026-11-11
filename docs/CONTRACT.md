@@ -214,8 +214,8 @@ flowpilot/
 |---|---|---|
 | GET | `/flowpilot/api/state` | `{ok, revision, state, derived}` |
 | POST | `/flowpilot/api/action` | body `{action, payload}` → `{ok, revision, state, derived, result}`；失败 `4xx/200 {ok:false, error, state?, derived?}` |
-| GET | `/flowpilot/api/webaccess` | 本地只读网页状态：`{ok, status:{enabled, running, host, port, url, startedAt, error}}`（见 `docs/WEB-ACCESS.md`） |
-| POST | `/flowpilot/api/webaccess` | body `{enabled?, port?}` → 开关/改端口，返回 `{ok, status}` |
+| GET | `/flowpilot/api/webaccess` | 本地网页访问状态：`{ok, status:{readOnly:{enabled,running,host,port,url,startedAt,error}, full:{enabled,running,host,port,url,loginUrl,hasToken,token,startedAt,error}, configFile}}`（见 `docs/WEB-ACCESS.md`） |
+| POST | `/flowpilot/api/webaccess` | body `{mode:'readOnly'\|'full', enabled?, port?, token?, regenerateToken?}` → 分模式开关/改端口/生成口令，返回 `{ok, status}`；省略 mode 兼容旧版 = readOnly |
 | GET | `/flowpilot/api/export` | 备份 JSON（`content-disposition: attachment`） |
 | POST | `/flowpilot/api/import` | body = 备份 JSON，整体替换 |
 

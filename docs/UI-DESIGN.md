@@ -1,5 +1,7 @@
 # FlowPilot UI 设计规范（设计系统 用色 + 4 栅格间距 + 去描边）
 
+> 全景版（设计原则、组件、文案、动效、可访问性、验证方法、决策记录）见 [`UX-UI-HANDBOOK.md`](UX-UI-HANDBOOK.md)。
+
 依据：《设计系统 2.0 用色规范》（B 站商业化组件库色表，浅/深双模式）。
 本文件是 FlowPilot 面板的**视觉硬约束**。改任何 UI 样式前先读这里，改完用 `node tools/audit-ui.mjs --strict` 自检。
 
@@ -101,8 +103,8 @@
 - **布局：白卡直接浮在 `--fp-base` 灰底上**，卡片之间只留 12px 间隙，不画描边、不叠双层边框。
 - 左栏项目导航 = 一张白色卡片（`--fp-surface` + `--fp-radius-lg`）；
   行级状态：hover `--fp-hover`、选中 `--fp-surface-2` + `--fp-shadow-1`。
-- 左栏底部操作（`.fp-nav__actions`）：两个按钮统一 32px 高 / 12px / 字重 500 / 左右内边距 24px；
-  图标绝对定位在左侧 8px，**文字相对按钮真正居中**（不是「图标 + 文字」整体居中），避免两个按钮看起来一大一小。
+- 左栏底部操作（`.fp-nav__actions`）：只剩 **AI 建流程** 一个按钮（单列占满，32px 高 / 12px / 字重 500，无图标、文字居中）；
+  「新建业务线」入口移到首次引导卡片与 AI 建流程对话框的「＋ 新建业务线…」选项。
 - **项目条目卡片排版**（左栏，对齐悬浮弹窗 `fp-quick-row` 的排版语言）：左右外边距 12、卡片上下间距 8、内边距 8、圆角 8；
   结构为 `main` 两行——`head`（10px 等宽编号 chip（surface-2 / 16px 行高）· 8px · 12px 标题）→ `meta`（11px 三级灰的「业务线 · 阶段」+ 内联截止日，橙色 `--fp-warn-strong`、逾期转红，间距 8）；
   底部 `进度条` absolute 贴卡底（left/right 0 / bottom 0 / 3px 高 / 下圆角与卡片一致，常显）；行 `overflow: hidden` + 标题省略号，长标题不会撑破侧栏；
@@ -127,10 +129,13 @@
   卡片 `--fp-surface` + `--radius-lg` + `--shadow-3`，内部分组用 `--fp-surface-2`，动效 `fp-qpanel-in`（140ms、位移 4px）。
 - 设置是**居中浮层**（`.fp-modal-layer` 用 `--fp-mask` 遮罩 + `.fp-modal` 白卡 `--radius-lg` + `--shadow-3`，
   `width: min(880px, 100%)`、`max-height: min(860px, 88vh)`，内容区 `overflow:auto`）。弹窗不画描边。
-- **主题色只旋转色相**：`--fp-accent` = `light-dark(hsl(H 100% 66.3%), hsl(H 100% 68%))`、
-  `--fp-accent-strong` = `light-dark(hsl(H 100% 61.6%), hsl(H 84% 63.1%))`；预设 H=275（紫）/216（蓝）/343（品牌粉），
-  自定义滑杆写 `localStorage['flowpilot.accentHue']`，启动时由 `fpApplyAccentHue` 注入 `documentElement`。
-  新增的强调色一律走 `--fp-accent*`，不要写死 hex。
+- **主题色只旋转色相**（饱和度/明度固定）：
+  `--fp-accent` = `light-dark(hsl(H 100% 66.3%), hsl(H 100% 68%))`、
+  `--fp-accent-strong` = `light-dark(hsl(H 100% 61.6%), hsl(H 100% 63%))`；
+  预设 H=275（紫）/216（蓝）/343（品牌粉），自定义滑杆写 `localStorage['flowpilot.accentHue']`。
+  注入方式：CSS 里 `--fp-accent: var(--fp-accent-runtime, light-dark(#b753ff, #bb5cff))`，
+  JS 只需在 `documentElement` 上写 `--fp-accent-runtime(-strong)`——**不要直接覆盖 `--fp-accent`**，
+  否则会被 `.fp-root` 里的同名令牌压回去（滑杆"不管用"的根因）。新增强调色一律走 `--fp-accent*`，不要写死 hex。
 - 弹窗、浮层、快捷面板：`--fp-overlay` + `--fp-shadow-3`（下拉 `--fp-shadow-2`）。
 - 悬停优先改底色（`--fp-hover`），不要加描边或位移。
 

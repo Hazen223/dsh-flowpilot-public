@@ -147,40 +147,64 @@ try {
   record('本地开发版：更新提示已抑制', false, error.message)
 }
 
-/* 本地只读网页（WEB-ACCESS.md）：状态 → 开启临时端口 → 页面/摘要可访问 → 写请求被拒 → 关闭 */
+/* 本地网页访问（WEB-ACCESS.md）：只读看板 + 远程工作台（口令鉴权）各开一个临时端口验证后关闭 */
 try {
   const before = await getJson('/flowpilot/api/webaccess')
-  const shapeOk = before.status === 200 && before.json && before.json.ok === true && before.json.status && typeof before.json.status.enabled === 'boolean'
-  record('本地只读网页：/webaccess 状态可读', shapeOk, 'HTTP ' + before.status)
+  const st = before.json && before.json.status ? before.json.status : null
+  const shapeOk = before.status === 200 && before.json && before.json.ok === true
+    && st && st.readOnly && typeof st.readOnly.enabled === 'boolean' && st.full && typeof st.full.enabled === 'boolean'
+  record('网页访问：/webaccess 双模式状态可读', shapeOk, 'HTTP ' + before.status)
   if (shapeOk) {
-    const port = await getFreePort()
     const post = (body) => fetch(BASE + '/flowpilot/api/webaccess', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(8000),
     }).then(async (res) => ({ status: res.status, json: await res.json().catch(() => null) }))
-    const on = await post({ enabled: true, port })
-    const running = on.json && on.json.ok === true && on.json.status && on.json.status.running === true
-    record('本地只读网页：可开启并监听本机端口', running === true, 'HTTP ' + on.status + ' port=' + port)
-    if (running) {
-      const pageRes = await fetch(on.json.status.url, { signal: AbortSignal.timeout(5000) })
+    // 只读看板
+    const roPort = await getFreePort()
+    const roOn = await post({ mode: 'readOnly', enabled: true, port: roPort })
+    const roRunning = roOn.json && roOn.json.ok === true && roOn.json.status && roOn.json.status.readOnly.running === true
+    record('只读看板：可开启并监听本机端口', roRunning === true, 'HTTP ' + roOn.status + ' port=' + roPort)
+    if (roRunning) {
+      const roUrl = roOn.json.status.readOnly.url
+      const pageRes = await fetch(roUrl, { signal: AbortSignal.timeout(5000) })
       const pageText = await pageRes.text()
-      const summaryRes = await fetch('http://127.0.0.1:' + port + '/api/summary', { signal: AbortSignal.timeout(5000) })
+      const summaryRes = await fetch('http://127.0.0.1:' + roPort + '/api/summary', { signal: AbortSignal.timeout(5000) })
       const summary = await summaryRes.json().catch(() => null)
       record(
-        '本地只读网页：页面与摘要可访问（只读看板）',
+        '只读看板：页面与摘要可访问',
         pageRes.status === 200 && pageText.indexOf('FlowPilot') !== -1 && summaryRes.status === 200 && summary && Array.isArray(summary.projects),
         'HTTP ' + pageRes.status + '/' + summaryRes.status + ' projects=' + (summary && summary.projects ? summary.projects.length : '?'),
       )
-      const writeRes = await fetch('http://127.0.0.1:' + port + '/api/summary', { method: 'POST', signal: AbortSignal.timeout(5000) })
-      record('本地只读网页：写请求被拒绝（只读）', writeRes.status === 405, 'HTTP ' + writeRes.status)
+      const writeRes = await fetch('http://127.0.0.1:' + roPort + '/api/summary', { method: 'POST', signal: AbortSignal.timeout(5000) })
+      record('只读看板：写请求被拒绝', writeRes.status === 405, 'HTTP ' + writeRes.status)
     }
-    const off = await post({ enabled: false })
-    record('本地只读网页：可关闭并停止监听', !!(off.json && off.json.ok === true && off.json.status && off.json.status.running === false), 'HTTP ' + off.status)
+    const roOff = await post({ mode: 'readOnly', enabled: false })
+    record('只读看板：可关闭并停止监听', !!(roOff.json && roOff.json.ok === true && roOff.json.status && roOff.json.status.readOnly.running === false), 'HTTP ' + roOff.status)
+
+    // 远程工作台（读写 + 口令）
+    const fullPort = await getFreePort()
+    const fullOn = await post({ mode: 'full', enabled: true, port: fullPort })
+    const fullEntry = fullOn.json && fullOn.json.ok === true && fullOn.json.status ? fullOn.json.status.full : null
+    const fullRunning = !!(fullEntry && fullEntry.running === true && fullEntry.hasToken === true)
+    record('远程工作台：可开启并生成访问口令', fullRunning, 'HTTP ' + fullOn.status + ' port=' + fullPort)
+    if (fullRunning) {
+      const token = String(fullEntry.token)
+      const unauth = await fetch('http://127.0.0.1:' + fullPort + '/api/state', { signal: AbortSignal.timeout(5000) })
+      record('远程工作台：未带口令被拒绝（401）', unauth.status === 401, 'HTTP ' + unauth.status)
+      const pageRes = await fetch(fullEntry.loginUrl, { signal: AbortSignal.timeout(5000) })
+      const pageText = await pageRes.text()
+      record('远程工作台：含口令链接可打开页面', pageRes.status === 200 && pageText.indexOf('远程工作台') !== -1, 'HTTP ' + pageRes.status)
+      const authed = await fetch('http://127.0.0.1:' + fullPort + '/api/state', { headers: { 'x-flowpilot-token': token }, signal: AbortSignal.timeout(5000) })
+      const authedJson = await authed.json().catch(() => null)
+      record('远程工作台：带口令可读写（/api/state）', authed.status === 200 && authedJson && authedJson.ok === true, 'HTTP ' + authed.status)
+    }
+    const fullOff = await post({ mode: 'full', enabled: false })
+    record('远程工作台：可关闭并停止监听', !!(fullOff.json && fullOff.json.ok === true && fullOff.json.status && fullOff.json.status.full.running === false), 'HTTP ' + fullOff.status)
   }
 } catch (error) {
-  record('本地只读网页：/webaccess 状态可读', false, error.message)
+  record('网页访问：/webaccess 双模式状态可读', false, error.message)
 }
 
 /* 构建身份：/update/status 应暴露 buildLabel（版本+sha+dirty），用于排障时确认跑的是哪一版 */
