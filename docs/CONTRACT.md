@@ -233,8 +233,8 @@ flowpilot/
 // 项目
 { "action": "createProject",     "payload": { "businessLineId": "bl_1", "title": "…",
                                               "templateIds": ["delivery","acceptance"],  // 或 "templateId"
-                                              "dueAt": "ISO"|null } }
-{ "action": "updateProject",     "payload": { "projectId": "pr_1", "title?":"…", "dueAt?":"ISO"|null, "businessLineId?" } }
+                                              "dueAt": "ISO"|null, "devOwner?": "研发姓名" } }
+{ "action": "updateProject",     "payload": { "projectId": "pr_1", "title?":"…", "dueAt?":"ISO"|null, "businessLineId?", "devOwner?": "研发姓名（空串=清除）" } }
 { "action": "archiveProject",    "payload": { "projectId": "pr_1", "archived": true } }
 { "action": "addFlow",           "payload": { "projectId": "pr_1", "templateId": "acceptance" } }
 
@@ -250,6 +250,7 @@ flowpilot/
                                                "passed": true, "comment": "" } }
 { "action": "setNodeSchedule",   "payload": { "nodeId": "nd_1", "dueAt": "ISO"|null, "followUpAt": "ISO"|null } }
 { "action": "setNodeNotes",      "payload": { "nodeId": "nd_1", "notes": "…" } }
+{ "action": "setNodeCheck",      "payload": { "nodeId": "nd_1", "key": "darkMode", "value": true } } // 验收节点的深色模式勾选
 { "action": "addNote",           "payload": { "projectId": "pr_1", "nodeId?": "nd_1", "text": "…" } } // 事件 manualNote
 { "action": "addNode",           "payload": { "flowId": "fl_1", "afterNodeId?"|"beforeNodeId?": null,
                                                "title": "…", "detail": "", "assigneeRole": "设计" } }
@@ -416,7 +417,7 @@ flowpilot/
 
 ### C. 归档项目写保护
 
-`startNode / completeNode / waitNode / blockNode / skipNode / reopenNode / approve / rejectApproval / setNodeSchedule / setNodeNotes / addNote / addLink / removeLink / addNode / removeNode / reorderNode / addFlow`
+`startNode / completeNode / waitNode / blockNode / skipNode / reopenNode / approve / rejectApproval / setNodeSchedule / setNodeNotes / setNodeCheck / addNote / addLink / removeLink / addNode / removeNode / reorderNode / addFlow`
 在改动前统一 `assertProjectWritable`：归档项目 → `INVALID_STATE`（409）「项目「X」已归档，恢复后才能修改」。
 允许：`archiveProject`、`updateProject`（含 `archived:false`）、只读动作。
 
@@ -459,7 +460,9 @@ flowpilot/
 
 ### C. `plannedAt`
 
-- `node.plannedAt: ISO | null`（老数据补 null）；`setNodeSchedule` 支持设置/清除（非法 ISO → 400）。
+"- `node.plannedAt: ISO | null`（老数据补 null）；`setNodeSchedule` 支持设置/清除（非法 ISO → 400）。
+- `project.devOwner: string`（项目级研发负责人，一位；旧项目缺失视为未指派）。
+- `node.darkMode: boolean`（验收流程节点的「深色模式验收」勾选，旧数据补 false；`setNodeCheck` 开关，仅 `key='darkMode'`）。
 - 展示：节点卡「计划 X/X」chip；详情「计划与跟进 › 计划开始」。`code` 表示身份、`sortOrder` 表示顺序、`plannedAt` 表示计划时间，三者互不影响。
 
 ### D. 客户端

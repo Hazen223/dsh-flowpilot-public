@@ -1969,6 +1969,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
   const [title, setTitle] = React.useState('');
   const [templates, setTemplates] = React.useState(['delivery']);
   const [dueDate, setDueDate] = React.useState('');
+  const [devOwner, setDevOwner] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(null);
 
@@ -1978,6 +1979,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
     setTitle('');
     setTemplates(['delivery']);
     setDueDate('');
+    setDevOwner('');
     setError(null);
     setBusy(false);
     /* 打开时重置表单；业务线列表变化时仅补齐默认值 */
@@ -2016,6 +2018,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
         title: title.trim(),
         templateIds: templates.slice(),
         dueAt: fpvToIso(dueDate, '', '23:59'),
+        devOwner: devOwner.trim(),
       });
       if (!response || response.ok === false) {
         setError((response && response.error) || '创建项目失败');
@@ -2079,6 +2082,12 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
       }))),
   h(FpField, { label: '交付日期', hint: '可留空' },
     fpvDateField('due', dueDate, setDueDate, { label: '交付日期' })),
+  h(FpField, { label: '研发负责人', hint: '可留空，创建后也能改' },
+    h(FpInput, {
+      value: devOwner,
+      placeholder: '例如：张伟',
+      onChange: function (event) { setDevOwner(fpvRead(event, '')); },
+    })),
   error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null,
   h('button', { type: 'submit', className: 'fp-v-submit-proxy', tabIndex: -1, 'aria-hidden': 'true' })
   ));

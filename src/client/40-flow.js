@@ -900,6 +900,12 @@ function FlowView({ state, derived, project, selection, onSelectNode, onCollapse
               h(FpIcon, { name: 'flag', size: 12 }),
               summary.currentCode ? summary.currentCode + ' · ' + summary.currentStage : summary.currentStage,
             ),
+            h(
+              'span',
+              { className: 'fp-flow-sub-item', title: '项目研发负责人（右键项目可修改）' },
+              h(FpIcon, { name: 'user', size: 12 }),
+              project.devOwner ? '研发 ' + project.devOwner : '研发未指派',
+            ),
             summary.actionable > 0 ? h(FpChip, { tone: 'brand', dot: true }, '可推进 ' + summary.actionable) : null,
             summary.waiting > 0 ? h(FpChip, { tone: 'warn', dot: true }, '等待 ' + summary.waiting) : null,
             summary.needsAttention ? h(FpChip, { tone: 'error', dot: true }, '需关注') : null,
@@ -1004,6 +1010,10 @@ function NodeDetail({ state, derived, project, node, onClose }) {
   const evidencePolicy = fpEvidencePolicy(node, project, settingsOfState);
   const gate = fpCanComplete(node, links, approvals, evidencePolicy);
   const archived = !!(project && project.status === 'archived');
+  const flowOfNode = (safeState && Array.isArray(safeState.flows) ? safeState.flows : [])
+    .filter((flow) => flow && flow.id === node.flowId)[0] || null;
+  const isAcceptanceNode = !!(flowOfNode && flowOfNode.templateId === 'acceptance');
+  const darkModeChecked = node.darkMode === true;
   const finished = status === 'completed' || status === 'skipped';
   const locked = status === 'locked';
   const flow = (safeState.flows || []).filter((item) => item.id === node.flowId)[0] || null;
@@ -1105,6 +1115,15 @@ function NodeDetail({ state, derived, project, node, onClose }) {
         setRejectComment('');
       }
     });
+  }
+
+  function toggleDarkModeCheck() {
+    if (archived) return;
+    perform(
+      'setNodeCheck',
+      { nodeId: node.id, key: 'darkMode', value: !darkModeChecked },
+      darkModeChecked ? '已取消深色模式验收' : '深色模式验收已勾选',
+    );
   }
 
   function beginScheduleEdit() {
@@ -1561,6 +1580,28 @@ function NodeDetail({ state, derived, project, node, onClose }) {
     return fpFlowSection('推进节点', {}, ...children);
   }
 
+  function renderAcceptanceSection() {
+    if (!isAcceptanceNode) return null;
+    return fpFlowSection(
+      '验收检查',
+      { hint: '完成验收前逐项确认' },
+      h(
+        'button',
+        {
+          type: 'button',
+          role: 'checkbox',
+          'aria-checked': darkModeChecked ? 'true' : 'false',
+          className: 'fp-check' + (darkModeChecked ? ' fp-check--on' : ''),
+          disabled: archived,
+          title: archived ? '项目已归档，无法修改验收项' : '勾选表示深色模式验收通过',
+          onClick: toggleDarkModeCheck,
+        },
+        h('span', { className: 'fp-check-box', 'aria-hidden': 'true' }, darkModeChecked ? h(FpIcon, { name: 'check', size: 11 }) : null),
+        h('span', { className: 'fp-check-label' }, '深色模式验收通过'),
+      ),
+    );
+  }
+
   function renderScheduleSection() {
     const settledSchedule = node.status === 'completed' || node.status === 'skipped';
     const dueInfo = node.dueAt ? fpFlowDueInfo(node.dueAt, now, settledSchedule) : null;
@@ -1891,6 +1932,7 @@ function NodeDetail({ state, derived, project, node, onClose }) {
           )
         : null,
       approvalNode ? renderApprovalSection() : null,
+      renderAcceptanceSection(),
       renderActionSection(),
       renderScheduleSection(),
       renderLinksSection(),
@@ -2793,6 +2835,38 @@ const CSS_FLOW = String.raw`
   background: color-mix(in srgb, var(--fp-ok) 12%, transparent);
 }
 /* 主操作与下方次要操作行：上下间距 12px；横向按钮之间仍为 8px */
+.fp-check {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-sp-2);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--fp-sp-2) var(--fp-sp-3);
+  border: 0;
+  border-radius: var(--fp-radius-md);
+  background: var(--fp-surface);
+  color: var(--fp-text);
+  font: inherit;
+  font-size: var(--fp-font-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.fp-check:hover:not(:disabled) { background: var(--fp-hover); }
+.fp-check:disabled { opacity: 0.55; cursor: not-allowed; }
+.fp-check-box {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--fp-radius-sm);
+  background: var(--fp-pressed);
+  color: var(--fp-accent-strong);
+}
+.fp-check--on .fp-check-box { background: color-mix(in srgb, var(--fp-accent) 16%, transparent); }
+.fp-check-label { flex: 1 1 auto; min-width: 0; }
 .fp-detail-actions { display: flex; flex-direction: column; gap: var(--fp-sp-3); }
 /* 详情分区底色是 surface-2；默认按钮若也用 surface-2 会完全糊在一起。
    这里把分区内的 default 按钮抬到 surface 一档（两套主题都有明确轮廓），不用强调色。 */

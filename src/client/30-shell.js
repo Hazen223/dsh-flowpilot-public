@@ -1410,6 +1410,66 @@ function fpShellSkeleton() {
  * FpRoot —— main 面板根组件
  * ------------------------------------------------------------------ */
 
+/* 项目级研发负责人：右键项目 →「研发负责人…」，一个项目一位 */
+function FpDevOwnerDialog({ open, project, onClose }) {
+  const [value, setValue] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const projectId = project && project.id ? project.id : '';
+
+  React.useEffect(function () {
+    if (!open) return;
+    setValue(project && project.devOwner ? String(project.devOwner) : '');
+    setError(null);
+    setBusy(false);
+  }, [open, projectId]);
+
+  if (!open) return null;
+
+  async function submit() {
+    if (busy || projectId === '') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fpDispatch('updateProject', { projectId: projectId, devOwner: value.trim() });
+      if (!response || response.ok === false) {
+        setError((response && response.error) || '保存失败');
+        return;
+      }
+      FpToast.push({
+        tone: 'success',
+        text: value.trim() === '' ? '已清除研发负责人' : '研发负责人：' + value.trim(),
+      });
+      if (typeof onClose === 'function') onClose();
+    } catch (err) {
+      setError((err && err.message) || '保存失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return h(FpDialog, {
+    open: true,
+    title: '研发负责人',
+    description: '确认这个项目由哪位研发对接，会显示在项目概览与周报里。',
+    width: 420,
+    onClose: function () { if (!busy && typeof onClose === 'function') onClose(); },
+    actions: [
+      h(FpButton, { key: 'cancel', variant: 'ghost', disabled: busy, onClick: function () { if (!busy && typeof onClose === 'function') onClose(); } }, '取消'),
+      h(FpButton, { key: 'save', variant: 'primary', disabled: busy, onClick: submit }, busy ? '保存中…' : '保存'),
+    ],
+  },
+  h(FpField, { label: '研发负责人' },
+    h(FpInput, {
+      value: value,
+      placeholder: '例如：张伟',
+      autoFocus: true,
+      onEnter: submit,
+      onChange: function (event) { setValue(fpvRead(event, '')); },
+    })),
+  error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null);
+}
+
 function FpRoot() {
   const snapshot = useFp();
   const status = snapshot !== null && typeof snapshot === 'object' && typeof snapshot.status === 'string' ? snapshot.status : 'loading';
@@ -1470,6 +1530,7 @@ function FpRoot() {
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [ctxMenu, setCtxMenu] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [devOwnerTarget, setDevOwnerTarget] = useState(null);
   const [seedBusy, setSeedBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rhythmDismissedKey, setRhythmDismissedKey] = useState(null);
@@ -3106,6 +3167,12 @@ function FpRoot() {
           ? selectedProject.businessLineId
           : null;
     return [
+      h(FpDevOwnerDialog, {
+        key: 'dlg-devowner',
+        open: devOwnerTarget !== null,
+        project: devOwnerTarget !== null && s !== null ? fpProjectById(s, devOwnerTarget) : null,
+        onClose: function () { setDevOwnerTarget(null); },
+      }),
       h(ProjectCreateDialog, {
         key: 'dlg-project',
         open: dialog.kind === 'projectCreate',
@@ -3178,6 +3245,20 @@ function FpRoot() {
           },
         },
         '打开项目',
+      ),
+      h(
+        'button',
+        {
+          key: 'dev-owner',
+          type: 'button',
+          role: 'menuitem',
+          className: 'fp-ctxmenu__item',
+          onClick: function () {
+            closeProjectMenu();
+            setDevOwnerTarget(project.id);
+          },
+        },
+        '研发负责人…',
       ),
       h(
         'button',
