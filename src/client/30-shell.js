@@ -1410,66 +1410,6 @@ function fpShellSkeleton() {
  * FpRoot —— main 面板根组件
  * ------------------------------------------------------------------ */
 
-/* 项目级研发负责人：右键项目 →「研发负责人…」，一个项目一位 */
-function FpDevOwnerDialog({ open, project, onClose }) {
-  const [value, setValue] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState(null);
-  const projectId = project && project.id ? project.id : '';
-
-  React.useEffect(function () {
-    if (!open) return;
-    setValue(project && project.devOwner ? String(project.devOwner) : '');
-    setError(null);
-    setBusy(false);
-  }, [open, projectId]);
-
-  if (!open) return null;
-
-  async function submit() {
-    if (busy || projectId === '') return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fpDispatch('updateProject', { projectId: projectId, devOwner: value.trim() });
-      if (!response || response.ok === false) {
-        setError((response && response.error) || '保存失败');
-        return;
-      }
-      FpToast.push({
-        tone: 'success',
-        text: value.trim() === '' ? '已清除研发负责人' : '研发负责人：' + value.trim(),
-      });
-      if (typeof onClose === 'function') onClose();
-    } catch (err) {
-      setError((err && err.message) || '保存失败');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return h(FpDialog, {
-    open: true,
-    title: '研发负责人',
-    description: '确认这个项目由哪位研发对接，会显示在项目概览与周报里。',
-    width: 420,
-    onClose: function () { if (!busy && typeof onClose === 'function') onClose(); },
-    actions: [
-      h(FpButton, { key: 'cancel', variant: 'ghost', disabled: busy, onClick: function () { if (!busy && typeof onClose === 'function') onClose(); } }, '取消'),
-      h(FpButton, { key: 'save', variant: 'primary', disabled: busy, onClick: submit }, busy ? '保存中…' : '保存'),
-    ],
-  },
-  h(FpField, { label: '研发负责人' },
-    h(FpInput, {
-      value: value,
-      placeholder: '例如：张伟',
-      autoFocus: true,
-      onEnter: submit,
-      onChange: function (event) { setValue(fpvRead(event, '')); },
-    })),
-  error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null);
-}
-
 function FpRoot() {
   const snapshot = useFp();
   const status = snapshot !== null && typeof snapshot === 'object' && typeof snapshot.status === 'string' ? snapshot.status : 'loading';
@@ -1530,7 +1470,6 @@ function FpRoot() {
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [ctxMenu, setCtxMenu] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [devOwnerTarget, setDevOwnerTarget] = useState(null);
   const [seedBusy, setSeedBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rhythmDismissedKey, setRhythmDismissedKey] = useState(null);
@@ -2095,6 +2034,18 @@ function FpRoot() {
 
   function handleOpenProject(projectId) {
     handleSelectProject(projectId);
+  }
+
+  function handleSelectProjectInfo() {
+    setSelectedNodeId(null);
+    setDetailCollapsed(false);
+  }
+
+  function handleOpenProjectInfo(projectId) {
+    if (typeof projectId !== 'string' || projectId === '') return;
+    if (selectedProjectId !== projectId) handleSelectProject(projectId);
+    setSelectedNodeId(null);
+    setDetailCollapsed(false);
   }
 
   function handleSelectNode(nodeId) {
@@ -2923,6 +2874,7 @@ function FpRoot() {
         selection: { projectId: selectedProjectId, nodeId: selectedNodeId },
         selectedNodeId: selectedNodeId,
         onSelectNode: handleSelectNode,
+        onSelectProjectInfo: handleSelectProjectInfo,
         onCollapseDetail: handleCollapseDetail,
         onCreateProject: handleCreateProjectFromFlow,
         onAddFlow: handleAddFlow,
@@ -2968,11 +2920,14 @@ function FpRoot() {
 
   function renderSide() {
     const collapsed = detailCollapsed === true;
+    // 不选节点时右栏显示「项目信息」（点项目标题进入）
+    const showProjectInfo = view === 'flow' && selectedProject !== null && selectedNode === null;
+    const hasContent = selectedNode !== null || showProjectInfo;
     // 窄屏/中屏保持原行为：收起时直接不占位（浮层模式下也不做折叠动画）
     if (collapsed && (narrow || mid)) return null;
-    if (!collapsed && selectedNode === null && mid) return null;
-    // 没有选中任何节点时也保持不渲染（避免空 rail）
-    if (selectedNode === null && collapsed) return null;
+    if (!collapsed && !hasContent && mid) return null;
+    // 没有任何内容时也保持不渲染（避免空 rail）
+    if (!hasContent && collapsed) return null;
 
     const classes = ['fp-side'];
     if (mid) classes.push('fp-side--overlay');
@@ -3002,7 +2957,7 @@ function FpRoot() {
               },
               h(FpIcon, { name: 'chevron-right', size: 13, className: 'fp-icon--flip' }),
             ),
-            h('span', { className: 'fp-side__rail-label' }, selectedNode.code || '详情'),
+            h('span', { className: 'fp-side__rail-label' }, selectedNode !== null ? (selectedNode.code || '详情') : '项目'),
           )
         : h(
             'div',
@@ -3032,7 +2987,16 @@ function FpRoot() {
                   onClose: handleCloseDetail,
                   onRequestDialog: handleNodeDialogRequest,
                 })
-              : renderSidePlaceholder(),
+              : showProjectInfo && selectedProject !== null
+                ? h(ProjectDetail, {
+                    state: s,
+                    derived: d,
+                    project: selectedProject,
+                    onClose: function () {
+                      setDetailCollapsed(true);
+                    },
+                  })
+                : renderSidePlaceholder(),
           ),
     );
   }
@@ -3056,7 +3020,7 @@ function FpRoot() {
     children.push(renderMain());
     const side = renderSide();
     if (side !== null) {
-      if (mid && !detailCollapsed && selectedNode !== null) {
+      if (mid && !detailCollapsed && (selectedNode !== null || (view === 'flow' && selectedProject !== null))) {
         children.push(
           h('button', {
             key: 'side-scrim',
@@ -3167,12 +3131,6 @@ function FpRoot() {
           ? selectedProject.businessLineId
           : null;
     return [
-      h(FpDevOwnerDialog, {
-        key: 'dlg-devowner',
-        open: devOwnerTarget !== null,
-        project: devOwnerTarget !== null && s !== null ? fpProjectById(s, devOwnerTarget) : null,
-        onClose: function () { setDevOwnerTarget(null); },
-      }),
       h(ProjectCreateDialog, {
         key: 'dlg-project',
         open: dialog.kind === 'projectCreate',
@@ -3249,16 +3207,16 @@ function FpRoot() {
       h(
         'button',
         {
-          key: 'dev-owner',
+          key: 'project-info',
           type: 'button',
           role: 'menuitem',
           className: 'fp-ctxmenu__item',
           onClick: function () {
             closeProjectMenu();
-            setDevOwnerTarget(project.id);
+            handleOpenProjectInfo(project.id);
           },
         },
-        '研发负责人…',
+        '项目信息…',
       ),
       h(
         'button',
@@ -3423,6 +3381,7 @@ function FpRoot() {
     renderProjectMenu(),
     renderLineMenu(),
     renderDeleteConfirm(),
+    h(FpChangelogAuto),
     h(FpToastHost),
   );
 }

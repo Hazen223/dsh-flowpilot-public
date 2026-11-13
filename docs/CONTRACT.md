@@ -93,6 +93,7 @@ flowpilot/
     "silentWindows": [["12:00","14:00"], ["18:00","19:00"]],  // 普通提醒静默
     "handoffTime": "20:45",         // 日终交接推荐时点
     "weeklyDraftTime": "12:05",     // 周五周报草稿生成时点
+    "reportOwner": "硫磺皂(liuhuaize)", // 周报「参与人」里的我（空串 = 不写）
     "weeklyMeetingTime": "17:00",
     "weekStartsOn": 1,              // 周一
     "workdays": [1,2,3,4,5],        // ISO 1-7
@@ -151,9 +152,20 @@ flowpilot/
   之后 `addLink(kind:'design')` 会自动补完成。
 - `derived.today.upcoming` 只与 `recommended` 去重，可能与 `followUps` 重叠。
 - 周五 12:05 之后首次读 `/state` 会自动补生成本周周报草稿（revision 会 +1，只补一次）。
-- 周报正文首段是「需求概述」：每个进行中/本周交付的项目给出 PRD 摘要（`project.summary`，缺失时用剩余节点拼）、
-  当前聚焦节点与说明、设计进度（设计中 / 设计完成 / 开发中 / 验收中 / 验收完成 / 验收完成（二次验收）/ 已交付）、
-  下一节点的计划时间（取 `plannedAt` → `dueAt` → `followUpAt`）。
+- 周报正文是**精简需求清单**，Markdown 结构（每个需求一块）：
+  ```
+  ### 序号.【业务线简称】需求名称  @参与人
+  （空行）
+  **需求背景：**<project.summary，缺失写（待补充）>
+  **进展：**<span style="color:#2ac864">设计交付 + 当前阶段</span>
+  **补充：**<本周手记，可无>
+  **链接：**
+  设计稿：<url>
+  Figma：<url>
+  ```
+  业务线简称由业务线名去掉「推广/业务/中心/项目/事业部/线」等后缀得到；
+  参与人 = `settings.reportOwner` + `project.devOwner`（去重后写成 `@名字`，用两个空格和标题隔开）；
+  链接只列 设计稿 / Figma，按 URL 去重；进展标签加粗、内容用绿色（内联 HTML，复制到飞书/Notion 可保留颜色）。
 
 ---
 
@@ -214,6 +226,7 @@ flowpilot/
 |---|---|---|
 | GET | `/flowpilot/api/state` | `{ok, revision, state, derived}` |
 | POST | `/flowpilot/api/action` | body `{action, payload}` → `{ok, revision, state, derived, result}`；失败 `4xx/200 {ok:false, error, state?, derived?}` |
+| GET | `/flowpilot/api/changelog` | 更新记录：`{ok, entries:[{version, date, items:[…]}]}`（读插件包内 `changelog.json`；缺失/损坏返回空数组） |
 | GET | `/flowpilot/api/webaccess` | 本地网页访问状态：`{ok, status:{readOnly:{enabled,running,host,port,url,startedAt,error}, full:{enabled,running,host,port,url,loginUrl,hasToken,token,startedAt,error}, configFile}}`（见 `docs/WEB-ACCESS.md`） |
 | POST | `/flowpilot/api/webaccess` | body `{mode:'readOnly'\|'full', enabled?, port?, token?, regenerateToken?}` → 分模式开关/改端口/生成口令，返回 `{ok, status}`；省略 mode 兼容旧版 = readOnly |
 | GET | `/flowpilot/api/export` | 备份 JSON（`content-disposition: attachment`） |
@@ -462,6 +475,10 @@ flowpilot/
 
 "- `node.plannedAt: ISO | null`（老数据补 null）；`setNodeSchedule` 支持设置/清除（非法 ISO → 400）。
 - `project.devOwner: string`（项目级研发负责人，一位；旧项目缺失视为未指派）。
+- `project.productOwner: string`（项目级产品负责人；旧项目缺失视为未指派）。
+- `project.prdUrl: string`（PRD 链接；旧项目缺失视为未关联）。
+- `project.summary: string`（需求背景 / PRD 摘要，周报「需求背景」使用）。
+  以上字段都可经 `createProject` / `updateProject` 传入，空串表示清除。
 - `node.darkMode: boolean`（验收流程节点的「深色模式验收」勾选，旧数据补 false；`setNodeCheck` 开关，仅 `key='darkMode'`）。
 - 展示：节点卡「计划 X/X」chip；详情「计划与跟进 › 计划开始」。`code` 表示身份、`sortOrder` 表示顺序、`plannedAt` 表示计划时间，三者互不影响。
 

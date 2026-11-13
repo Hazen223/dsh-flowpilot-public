@@ -18,6 +18,8 @@
  *   `lib/ai.js` 运行时 `ctx.get(...)` 懒取 + try/catch，拿不到就退回规则解析。
  */
 
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createAiService } from './lib/ai.js'
 import { createEngine, summarizeResult } from './lib/domain.js'
 import { API_PATHS, createRoutes } from './lib/http.js'
@@ -329,6 +331,8 @@ function registerTool(ctx, engine, aiService, syncService, logger) {
   }
 }
 
+const CHANGELOG_FILE = join(dirname(fileURLToPath(import.meta.url)), 'changelog.json')
+
 function registerRoutes(ctx, engine, aiService, syncService, updateService, webAccessService, logger) {
   const webServer = resolveWebServer(ctx, logger)
   if (!webServer) {
@@ -337,7 +341,7 @@ function registerRoutes(ctx, engine, aiService, syncService, updateService, webA
   }
   let routes
   try {
-    routes = createRoutes({ engine, aiService, syncService, updateService, webAccessService, logger })
+    routes = createRoutes({ engine, aiService, syncService, updateService, webAccessService, logger, changelogFile: CHANGELOG_FILE })
   } catch (error) {
     logger?.warn?.(`[flowpilot] 创建 HTTP 路由失败：${errorText(error)}`)
     return

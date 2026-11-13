@@ -415,6 +415,7 @@ function fpvSettingsDraft(settings) {
     weeklyDraftTime: src.weeklyDraftTime || '12:05',
     weeklyMeetingTime: src.weeklyMeetingTime || '17:00',
     weekStartsOn: String(typeof src.weekStartsOn === 'number' ? src.weekStartsOn : 1),
+    reportOwner: typeof src.reportOwner === 'string' ? src.reportOwner : '',
     evidenceKinds: (function () {
       const policy = src.evidencePolicy !== null && typeof src.evidencePolicy === 'object' ? src.evidencePolicy : {};
       return Array.isArray(policy.kinds) ? policy.kinds.slice() : [];
@@ -1416,6 +1417,7 @@ function SettingsView({ state, derived, compact }) {
           weeklyDraftTime: draft.weeklyDraftTime,
           weeklyMeetingTime: draft.weeklyMeetingTime,
           weekStartsOn: Number(draft.weekStartsOn),
+          reportOwner: String(draft.reportOwner || '').trim(),
           evidencePolicy: {
             kinds: draft.evidenceKinds.slice(),
             minLinks: Number(draft.evidenceMin),
@@ -1559,6 +1561,16 @@ function SettingsView({ state, derived, compact }) {
         updateDraft(function (next) { next.weeklyDraftTime = value; });
       }, { label: '周报草稿生成时间' }),
       h('span', { className: 'fp-v-setting-hint' }, '周五自动生成草稿的时点')
+    ),
+    h('div', { key: 'reportOwner', className: 'fp-v-setting-row' },
+      h('span', { className: 'fp-v-label' }, '周报署名'),
+      h(FpInput, {
+        value: draft.reportOwner,
+        width: 220,
+        placeholder: '例如：硫磺皂(liuhuaize)',
+        onChange: function (value) { updateDraft(function (next) { next.reportOwner = value; }); },
+      }),
+      h('span', { className: 'fp-v-setting-hint' }, '写进周报的参与人')
     ),
     h('div', { key: 'meeting', className: 'fp-v-setting-row' },
       h('span', { className: 'fp-v-label' }, '周会'),
@@ -1970,6 +1982,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
   const [templates, setTemplates] = React.useState(['delivery']);
   const [dueDate, setDueDate] = React.useState('');
   const [devOwner, setDevOwner] = React.useState('');
+  const [productOwner, setProductOwner] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(null);
 
@@ -1980,6 +1993,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
     setTemplates(['delivery']);
     setDueDate('');
     setDevOwner('');
+    setProductOwner('');
     setError(null);
     setBusy(false);
     /* 打开时重置表单；业务线列表变化时仅补齐默认值 */
@@ -2019,6 +2033,7 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
         templateIds: templates.slice(),
         dueAt: fpvToIso(dueDate, '', '23:59'),
         devOwner: devOwner.trim(),
+        productOwner: productOwner.trim(),
       });
       if (!response || response.ok === false) {
         setError((response && response.error) || '创建项目失败');
@@ -2087,6 +2102,12 @@ function ProjectCreateDialog({ open, onClose, state, defaultLineId, onCreated })
       value: devOwner,
       placeholder: '例如：张伟',
       onChange: function (event) { setDevOwner(fpvRead(event, '')); },
+    })),
+  h(FpField, { label: '产品负责人', hint: '可留空' },
+    h(FpInput, {
+      value: productOwner,
+      placeholder: '例如：李娜',
+      onChange: function (event) { setProductOwner(fpvRead(event, '')); },
     })),
   error ? h('div', { className: 'fp-v-form-error', role: 'alert' }, error) : null,
   h('button', { type: 'submit', className: 'fp-v-submit-proxy', tabIndex: -1, 'aria-hidden': 'true' })
